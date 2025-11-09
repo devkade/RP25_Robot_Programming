@@ -1,0 +1,52 @@
+# Colcon workspace build artifacts
+build/
+install/
+log/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# C/C++ build artifacts
+*.o
+*.lo
+*.la
+*.out
+*.app
+*.exe
+*.dll
+*.dylib
+*.dSYM/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ROS specific
+COLCON_IGNORE
+.catkin_tools/
+.catkin_workspace
+
+# Test and coverage
+*.gcda
+*.gcno
+*.gcov
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Documentation
+doc/html/
+doc/latex/
+
+# Temporary files
+*.bak
+*.tmp
+*.log

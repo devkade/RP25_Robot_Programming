@@ -155,61 +155,61 @@ public:
     close_gripper(gripper, 0.0);
 
     Block objects[] = {
-      Block(0.05, 0.05, 0.06, 0,     Location(0.4, 0.1)),   // box1
-      Block(0.05, 0.05, 0.06, 0,     Location(0.4, 0.0)),   // box2
-      Block(0.05, 0.025, 0.06, 0,    Location(0.4, -0.1)),  // box3
-      Block(0.05, 0.05, 0.09, 0,     Location(0.6, 0.0)),   // box4
-      Block(0.05, 0.05, 0.08, 0,     Location(0.5, 0.1)),   // cylinder
-      Block(0.05, 0.05, 0.07, 0,     Location(0.5, -0.1)),  // box5
-      Block(0.05, 0.05, 0.06, 0,     Location(0.6, 0.1)),   // triangle
-      Block(0.05, 0.05, 0.06, 0.025, Location(0.5, 0.0)),   // box6
+      Block(0.05, 0.05, 0.06, 0,     Location(0.4, 0.1)),   // 1: box1
+      Block(0.05, 0.05, 0.06, 0,     Location(0.4, 0.0)),   // 2: box2
+      Block(0.05, 0.025, 0.06, 0,    Location(0.4, -0.1)),  // 3: box3 (narrow!)
+      Block(0.05, 0.05, 0.07, 0,     Location(0.5, -0.1)),  // 4: box4
+      Block(0.05, 0.05, 0.08, 0,     Location(0.5, 0.1)),   // 5: box5
+      Block(0.05, 0.05, 0.09, 0,     Location(0.6, 0.0)),   // 6: box6
+      Block(0.05, 0.05, 0.06, 0,     Location(0.6, 0.1)),   // 7: triangle
+      Block(0.05, 0.05, 0.06, 0.025, Location(0.5, 0.0)),   // 8: cylinder
     };
 
     Location target_locations[] = {
-      Location(-0.15, 0.45),  // box1
-      Location(-0.15, 0.55),  // box2
-      Location(0.15, 0.45),   // box3
-      Location(-0.05, 0.55),  // box4
-      Location(0.15, 0.55),   // cylinder
-      Location(0.05, 0.55),   // box5
-      Location(0.05, 0.45),   // triangle
-      Location(-0.05, 0.45),  // box6
+      Location(-0.15, 0.45),  // 1: box1
+      Location(-0.15, 0.55),  // 2: box2
+      Location(0.15, 0.45),   // 3: box3
+      Location(0.05, 0.55),   // 4: box4
+      Location(-0.05, 0.45),  // 5: box5
+      Location(-0.05, 0.55),  // 6: box6
+      Location(0.05, 0.45),   // 7: triangle
+      Location(0.15, 0.55),   // 8: cylinder
     };
 
     // Define gripper values for each object
     double grip_values[] = {
-      0.024,  // box1
-      0.024,  // box2
-      0.011,  // box3
-      0.024,  // box4
-      0.024,  // cylinder
-      0.024,  // box5
-      0.01335, // triangle
-      0.024,  // box6
+      0.024,   // 1: box1
+      0.024,   // 2: box2
+      0.011,   // 3: box3 (narrow!)
+      0.024,   // 4: box4
+      0.024,   // 5: box5
+      0.024,   // 6: box6
+      0.01335, // 7: triangle
+      0.024,   // 8: cylinder
     };
 
     // Define rotation angles for placing objects (in radians)
     double rotation_angles[] = {
-      0.0,     // box1
-      0.0,     // box2
-      M_PI/2,  // box3
-      0.0,     // box4
-      0.0,     // cylinder
-      0.0,     // box5
-      M_PI/8,  // triangle
-      0.0,     // box6
+      0.0,     // 1: box1
+      0.0,     // 2: box2
+      M_PI/2,  // 3: box3 (90 degrees)
+      0.0,     // 4: box4
+      0.0,     // 5: box5
+      0.0,     // 6: box6
+      M_PI/8,  // 7: triangle (22.5 degrees)
+      0.0,     // 8: cylinder
     };
 
     // Define grasp angle offsets for picking objects (in radians)
     double grasp_angle_offsets[] = {
-      0.0,      // box1
-      0.0,      // box2
-      0.0,      // box3
-      0.0,      // box4
-      0.0,      // cylinder
-      0.0,      // box5
-      -M_PI/2,  // triangle (compensate for initial -90 degree spawn rotation)
-      0.0,      // box6
+      0.0,      // 1: box1
+      0.0,      // 2: box2
+      0.0,      // 3: box3
+      0.0,      // 4: box4
+      0.0,      // 5: box5
+      0.0,      // 6: box6
+      -M_PI/2,  // 7: triangle (-90 degree compensation)
+      0.0,      // 8: cylinder
     };
 
     for (int i = 0; i < 8; i++) {

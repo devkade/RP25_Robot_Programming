@@ -172,23 +172,46 @@ public:
       Location(-0.15, 0.55),  // 2: box2
       Location(0.15, 0.45),   // 3: box3
       Location(0.05, 0.55),   // 4: box4
-      Location(-0.05, 0.45),  // 5: box5
+      Location(0.15, 0.55),   // 5: cylinder
       Location(-0.05, 0.55),  // 6: box6
       Location(0.05, 0.45),   // 7: triangle
-      Location(0.15, 0.55),   // 8: cylinder
+      Location(-0.05, 0.45),  // 8: box5
     };
 
     // Define gripper values for each object
     double grip_values[] = {
-      0.0243,  // 1: box1
-      0.0243,  // 2: box2
-      0.012,   // 3: box3 (narrow - half width!)
-      0.0243,  // 4: box4
-      0.0243,  // 5: box5
-      0.0243,  // 6: box6
-      0.024,   // 7: triangle
-      0.024,   // 8: cylinder
+      0.024,  // 1: box1
+      0.024,  // 2: box2
+      0.012,  // 3: box3 (narrow - half width!)
+      0.024,  // 4: box4
+      0.024,  // 5: cylinder
+      0.024,  // 6: box6
+      0.024,  // 7: triangle
+      0.024,  // 8: box5
     };
+
+    // Define rotation angles for each object (in radians)
+    double rotation_angles[] = {
+      0.0,     // 1: box1 (no rotation)
+      0.0,     // 2: box2 (no rotation)
+      M_PI/2,  // 3: box3 (90 degrees - narrow cube!)
+      0.0,     // 4: box4 (no rotation)
+      0.0,     // 5: cylinder (no rotation)
+      0.0,     // 6: box6 (no rotation)
+      0.0,     // 7: triangle (no rotation - change to M_PI/2 if needed)
+      0.0,     // 8: box5 (no rotation)
+    };
+
+    // DEBUG: Print all object positions
+    RCLCPP_INFO(this->get_logger(), "========================================");
+    RCLCPP_INFO(this->get_logger(), "DEBUGGING: Expected object positions:");
+    for (int i = 0; i < 8; i++) {
+      RCLCPP_INFO(this->get_logger(), "  Object %d: (%.3f, %.3f)",
+                  i+1, objects[i].location.x, objects[i].location.y);
+    }
+    RCLCPP_INFO(this->get_logger(), "Check Gazebo to verify these positions!");
+    RCLCPP_INFO(this->get_logger(), "========================================");
+    rclcpp::sleep_for(std::chrono::seconds(3));  // Wait 3 seconds to check
 
     // Process all 8 objects
     for (int i = 0; i < 8; i++) {
@@ -200,11 +223,18 @@ public:
                   target_locations[i].x, target_locations[i].y);
       RCLCPP_INFO(this->get_logger(), "  Grip:    %.4f", grip_values[i]);
 
+      // Step 1: Lift the object
       lift_block(node_ptr, arm, gripper, objects[i], grip_values[i]);
-      place_block(node_ptr, arm, gripper, target_locations[i]);
+
+      // Step 2: Place the object (rotation applied if needed)
+      if (rotation_angles[i] != 0.0) {
+        RCLCPP_INFO(this->get_logger(), "⚠️  Rotation: %.1f degrees",
+                    rotation_angles[i] * 180.0 / M_PI);
+      }
+      place_block(node_ptr, arm, gripper, target_locations[i], rotation_angles[i]);
 
       rclcpp::sleep_for(std::chrono::milliseconds(500));
-      RCLCPP_INFO(this->get_logger(), "Object %d/8 completed!", i + 1);
+      RCLCPP_INFO(this->get_logger(), "✓ Object %d/8 completed!", i + 1);
     }
 
     RCLCPP_INFO(this->get_logger(), "========================================");
@@ -240,22 +270,69 @@ private:
   void place_block(rclcpp::Node::SharedPtr node,
                    moveit::planning_interface::MoveGroupInterface& arm_interface,
                    moveit::planning_interface::MoveGroupInterface& gripper_interface,
-                   Location location) {
+                   Location location,
+                   double rotation_angle = 0.0) {  // Default: no rotation
 
-    geometry_msgs::msg::Pose target_pose1 = list_to_pose(location.x, location.y, 0.4, M_PI, 0, -M_PI/4);
-    geometry_msgs::msg::Pose target_pose2 = list_to_pose(location.x, location.y, 0.125 + 0.185, M_PI, 0, -M_PI/4);
-    
-    std::vector<geometry_msgs::msg::Pose> waypoints1;
-    std::vector<geometry_msgs::msg::Pose> waypoints2;
-    
-    waypoints1.push_back(target_pose1);
-    waypoints1.push_back(target_pose2);
-    waypoint_sample(arm_interface, node, waypoints1);
-    open_gripper(gripper_interface);
+    double base_yaw = -M_PI/4;  // Base orientation
 
-    waypoints2.push_back(target_pose1);
-    waypoint_sample(arm_interface, node, waypoints2);
+    // If rotation is needed (non-zero), apply rotation logic
+    if (rotation_angle != 0.0) {
+      RCLCPP_INFO(node->get_logger(), "Rotating object by %.1f degrees", rotation_angle * 180.0 / M_PI);
 
+      // Step 1: Move to target position (above) with original orientation
+      geometry_msgs::msg::Pose target_pose1 = list_to_pose(location.x, location.y, 0.4, M_PI, 0, base_yaw);
+      std::vector<geometry_msgs::msg::Pose> waypoints1;
+      waypoints1.push_back(target_pose1);
+      waypoint_sample(arm_interface, node, waypoints1);
+
+      // Step 2: Rotate gripper
+      geometry_msgs::msg::Pose target_pose_rotated = list_to_pose(
+          location.x, location.y, 0.4,
+          M_PI, 0, base_yaw + rotation_angle
+      );
+      std::vector<geometry_msgs::msg::Pose> waypoints_rotate;
+      waypoints_rotate.push_back(target_pose_rotated);
+      waypoint_sample(arm_interface, node, waypoints_rotate);
+
+      // Step 3: Lower down with rotated orientation
+      geometry_msgs::msg::Pose target_pose2 = list_to_pose(
+          location.x, location.y, 0.125 + 0.185,
+          M_PI, 0, base_yaw + rotation_angle
+      );
+      std::vector<geometry_msgs::msg::Pose> waypoints2;
+      waypoints2.push_back(target_pose2);
+      waypoint_sample(arm_interface, node, waypoints2);
+
+      // Step 4: Open gripper
+      open_gripper(gripper_interface);
+
+      // Step 5: Move back up (still rotated)
+      std::vector<geometry_msgs::msg::Pose> waypoints3;
+      waypoints3.push_back(target_pose_rotated);
+      waypoint_sample(arm_interface, node, waypoints3);
+
+      // Step 6: Rotate back to original orientation
+      RCLCPP_INFO(node->get_logger(), "Rotating back to original orientation");
+      std::vector<geometry_msgs::msg::Pose> waypoints_unrotate;
+      waypoints_unrotate.push_back(target_pose1);
+      waypoint_sample(arm_interface, node, waypoints_unrotate);
+
+    } else {
+      // Normal placement (no rotation)
+      geometry_msgs::msg::Pose target_pose1 = list_to_pose(location.x, location.y, 0.4, M_PI, 0, base_yaw);
+      geometry_msgs::msg::Pose target_pose2 = list_to_pose(location.x, location.y, 0.125 + 0.185, M_PI, 0, base_yaw);
+
+      std::vector<geometry_msgs::msg::Pose> waypoints1;
+      std::vector<geometry_msgs::msg::Pose> waypoints2;
+
+      waypoints1.push_back(target_pose1);
+      waypoints1.push_back(target_pose2);
+      waypoint_sample(arm_interface, node, waypoints1);
+      open_gripper(gripper_interface);
+
+      waypoints2.push_back(target_pose1);
+      waypoint_sample(arm_interface, node, waypoints2);
+    }
   }
 };
 

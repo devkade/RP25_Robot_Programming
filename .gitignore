@@ -50,3 +50,5 @@ doc/latex/
 *.bak
 *.tmp
 *.log
+
+docs/

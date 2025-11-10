@@ -188,16 +188,28 @@ public:
       0.024,  // box6
     };
 
-    // Define rotation angles for each object (in radians)
+    // Define rotation angles for placing objects (in radians)
     double rotation_angles[] = {
       0.0,     // box1
-      0.0,     // box2 
-      M_PI/2,  // box3 
-      0.0,     // box4 
-      0.0,     // cylinder 
-      0.0,     // box5 
-      M_PI/7.9,// triangle
+      0.0,     // box2
+      M_PI/2,  // box3
+      0.0,     // box4
+      0.0,     // cylinder
+      0.0,     // box5
+      M_PI/8,  // triangle
       0.0,     // box6
+    };
+
+    // Define grasp angle offsets for picking objects (in radians)
+    double grasp_angle_offsets[] = {
+      0.0,      // box1
+      0.0,      // box2
+      0.0,      // box3
+      0.0,      // box4
+      0.0,      // cylinder
+      0.0,      // box5
+      -M_PI/2,  // triangle (compensate for initial -90 degree spawn rotation)
+      0.0,      // box6
     };
 
     for (int i = 0; i < 8; i++) {
@@ -208,12 +220,16 @@ public:
                   target_locations[i].x, target_locations[i].y);
       RCLCPP_INFO(this->get_logger(), "  Grip:    %.4f", grip_values[i]);
 
-      // Step 1: Lift the object
-      lift_block(node_ptr, arm, gripper, objects[i], grip_values[i]);
+      // Step 1: Lift the object (with grasp angle offset if needed)
+      if (grasp_angle_offsets[i] != 0.0) {
+        RCLCPP_INFO(this->get_logger(), "⚠️  Grasp angle offset: %.1f degrees",
+                    grasp_angle_offsets[i] * 180.0 / M_PI);
+      }
+      lift_block(node_ptr, arm, gripper, objects[i], grip_values[i], grasp_angle_offsets[i]);
 
-      // Step 2: Place the object (rotation applied if needed)
+      // Step 2: Place the object (with rotation if needed)
       if (rotation_angles[i] != 0.0) {
-        RCLCPP_INFO(this->get_logger(), "⚠️  Rotation: %.1f degrees",
+        RCLCPP_INFO(this->get_logger(), "⚠️  Place rotation: %.1f degrees",
                     rotation_angles[i] * 180.0 / M_PI);
       }
       place_block(node_ptr, arm, gripper, target_locations[i], rotation_angles[i]);
@@ -231,10 +247,13 @@ private:
   void lift_block(rclcpp::Node::SharedPtr node,
                   moveit::planning_interface::MoveGroupInterface& arm_interface,
                   moveit::planning_interface::MoveGroupInterface& gripper_interface,
-                  Block block, double value) {
+                  Block block, double value, double grasp_angle_offset = 0.0) {
 
-    geometry_msgs::msg::Pose target_pose1 = list_to_pose(block.location.x, block.location.y, 0.4, M_PI, 0, -M_PI/4);
-    geometry_msgs::msg::Pose target_pose2 = list_to_pose(block.location.x, block.location.y, block.height + 0.185, M_PI, 0, -M_PI/4);
+    double base_yaw = -M_PI/4;  // Base orientation
+    double grasp_yaw = base_yaw + grasp_angle_offset;  // Apply offset for special objects
+
+    geometry_msgs::msg::Pose target_pose1 = list_to_pose(block.location.x, block.location.y, 0.4, M_PI, 0, grasp_yaw);
+    geometry_msgs::msg::Pose target_pose2 = list_to_pose(block.location.x, block.location.y, block.height + 0.185, M_PI, 0, grasp_yaw);
     
     std::vector<geometry_msgs::msg::Pose> waypoints1;
     std::vector<geometry_msgs::msg::Pose> waypoints2;

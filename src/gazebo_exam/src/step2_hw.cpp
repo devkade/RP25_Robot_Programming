@@ -155,92 +155,72 @@ public:
     close_gripper(gripper, 0.0);
 
     Block objects[] = {
-      Block(0.05, 0.05, 0.06, 0,     Location(0.4, 0.1)),   // 1: box1
-      Block(0.05, 0.05, 0.06, 0,     Location(0.4, 0.0)),   // 2: box2
-      Block(0.05, 0.025, 0.06, 0,    Location(0.4, -0.1)),  // 3: box3 (narrow!)
-      Block(0.05, 0.05, 0.07, 0,     Location(0.5, 0.1)),   // 4: box5
-      Block(0.05, 0.05, 0.06, 0.025, Location(0.5, 0.0)),   // 5: cylinder
-      Block(0.05, 0.05, 0.08, 0,     Location(0.5, -0.1)),  // 6: box4
-      Block(0.05, 0.05, 0.06, 0,     Location(0.6, 0.1)),   // 7: triangle
-      Block(0.05, 0.05, 0.09, 0,     Location(0.6, 0.0)),   // 8: box6
+      Block(0.05, 0.05, 0.06, 0,     Location(0.4, 0.1)),   
+      Block(0.05, 0.05, 0.06, 0,     Location(0.4, 0.0)),   
+      Block(0.05, 0.025, 0.06, 0,    Location(0.4, -0.1)),  
+      Block(0.05, 0.05, 0.07, 0,     Location(0.5, 0.1)),   
+      Block(0.05, 0.05, 0.06, 0.025, Location(0.5, 0.0)),   
+      Block(0.05, 0.05, 0.08, 0,     Location(0.5, -0.1)),  
+      Block(0.05, 0.05, 0.09, 0,     Location(0.6, 0.0)),   
+      Block(0.05, 0.05, 0.06, 0,     Location(0.6, 0.1)),   
     };
 
     Location target_locations[] = {
-      Location(-0.15, 0.45),  // 1: box1
-      Location(-0.15, 0.55),  // 2: box2
-      Location(0.15, 0.45),   // 3: box3
-      Location(0.05, 0.55),  // 4: box5
-      Location(-0.05, 0.45),   // 5: cylinder
-      Location(-0.05, 0.55),   // 6: box4
-      Location(0.05, 0.45),   // 7: triangle
-      Location(0.15, 0.55),  // 8: box6
+      Location(-0.15, 0.45),  
+      Location(-0.15, 0.55),  
+      Location(0.15, 0.45),   
+      Location(0.05, 0.55),  
+      Location(-0.05, 0.45),   
+      Location(-0.05, 0.55),   
+      Location(0.15, 0.55),  
+      Location(0.05, 0.45),   
     };
 
     // Define gripper values for each object
     double grip_values[] = {
-      0.024,   // 1: box1
-      0.024,   // 2: box2
-      0.011,   // 3: box3 (narrow!)
-      0.024,   // 4: box5
-      0.024,   // 5: cylinder
-      0.024,   // 6: box4
-      0.01335, // 7: triangle
-      0.024,   // 8: box6
+      0.024,   
+      0.024,   
+      0.011,   
+      0.024,   
+      0.024,   
+      0.024,   
+      0.024,   
+      0.01334,
     };
 
     // Define rotation angles for placing objects (in radians)
     double rotation_angles[] = {
-      0.0,     // 1: box1
-      0.0,     // 2: box2
-      M_PI/2,  // 3: box3 (90 degrees)
-      0.0,     // 4: box5
-      0.0,     // 5: cylinder
-      0.0,     // 6: box4
-      M_PI/8,  // 7: triangle (22.5 degrees)
-      0.0,     // 8: box6
+      0.0,     
+      0.0,     
+      M_PI/2,  
+      0.0,     
+      0.0,     
+      0.0,     
+      0.0,     
+      M_PI/4,  
     };
 
     // Define grasp angle offsets for picking objects (in radians)
     double grasp_angle_offsets[] = {
-      0.0,      // 1: box1
-      0.0,      // 2: box2
-      0.0,      // 3: box3
-      0.0,      // 4: box5
-      0.0,      // 5: cylinder
-      0.0,      // 6: box4
-      -M_PI/2,  // 7: triangle (-90 degree compensation)
-      0.0,      // 8: box6
+      0.0,      
+      0.0,      
+      0.0,      
+      0.0,      
+      0.0,      
+      0.0,      
+      0.0,
+      0.0,      
     };
 
     for (int i = 0; i < 8; i++) {
-      RCLCPP_INFO(this->get_logger(), "Processing object %d/8", i + 1);
-      RCLCPP_INFO(this->get_logger(), "  Initial: (%.3f, %.3f)",
-                  objects[i].location.x, objects[i].location.y);
-      RCLCPP_INFO(this->get_logger(), "  Target:  (%.3f, %.3f)",
-                  target_locations[i].x, target_locations[i].y);
-      RCLCPP_INFO(this->get_logger(), "  Grip:    %.4f", grip_values[i]);
-
-      // Step 1: Lift the object (with grasp angle offset if needed)
-      if (grasp_angle_offsets[i] != 0.0) {
-        RCLCPP_INFO(this->get_logger(), "⚠️  Grasp angle offset: %.1f degrees",
-                    grasp_angle_offsets[i] * 180.0 / M_PI);
-      }
       lift_block(node_ptr, arm, gripper, objects[i], grip_values[i], grasp_angle_offsets[i]);
 
-      // Step 2: Place the object (with rotation if needed)
-      if (rotation_angles[i] != 0.0) {
-        RCLCPP_INFO(this->get_logger(), "⚠️  Place rotation: %.1f degrees",
-                    rotation_angles[i] * 180.0 / M_PI);
-      }
       place_block(node_ptr, arm, gripper, target_locations[i], rotation_angles[i]);
 
       rclcpp::sleep_for(std::chrono::milliseconds(500));
       RCLCPP_INFO(this->get_logger(), "✓ Object %d/8 completed!", i + 1);
     }
 
-    RCLCPP_INFO(this->get_logger(), "========================================");
-    RCLCPP_INFO(this->get_logger(), "All 8 objects placed successfully!");
-    RCLCPP_INFO(this->get_logger(), "========================================");
   }
 
 private:
@@ -275,21 +255,19 @@ private:
                    moveit::planning_interface::MoveGroupInterface& arm_interface,
                    moveit::planning_interface::MoveGroupInterface& gripper_interface,
                    Location location,
-                   double rotation_angle = 0.0) {  // Default: no rotation
+                   double rotation_angle = 0.0) {  
 
     double base_yaw = -M_PI/4;  // Base orientation
 
-    // If rotation is needed (non-zero), apply rotation logic
+    // If rotation is needed, apply rotation logic
     if (rotation_angle != 0.0) {
       RCLCPP_INFO(node->get_logger(), "Rotating object by %.1f degrees", rotation_angle * 180.0 / M_PI);
 
-      // Step 1: Move to target position (above) with original orientation
       geometry_msgs::msg::Pose target_pose1 = list_to_pose(location.x, location.y, 0.4, M_PI, 0, base_yaw);
       std::vector<geometry_msgs::msg::Pose> waypoints1;
       waypoints1.push_back(target_pose1);
       waypoint_sample(arm_interface, node, waypoints1);
 
-      // Step 2: Rotate gripper
       geometry_msgs::msg::Pose target_pose_rotated = list_to_pose(
           location.x, location.y, 0.4,
           M_PI, 0, base_yaw + rotation_angle
@@ -298,7 +276,6 @@ private:
       waypoints_rotate.push_back(target_pose_rotated);
       waypoint_sample(arm_interface, node, waypoints_rotate);
 
-      // Step 3: Lower down with rotated orientation
       geometry_msgs::msg::Pose target_pose2 = list_to_pose(
           location.x, location.y, 0.125 + 0.185,
           M_PI, 0, base_yaw + rotation_angle
@@ -307,15 +284,12 @@ private:
       waypoints2.push_back(target_pose2);
       waypoint_sample(arm_interface, node, waypoints2);
 
-      // Step 4: Open gripper
       open_gripper(gripper_interface);
 
-      // Step 5: Move back up (still rotated)
       std::vector<geometry_msgs::msg::Pose> waypoints3;
       waypoints3.push_back(target_pose_rotated);
       waypoint_sample(arm_interface, node, waypoints3);
 
-      // Step 6: Rotate back to original orientation
       RCLCPP_INFO(node->get_logger(), "Rotating back to original orientation");
       std::vector<geometry_msgs::msg::Pose> waypoints_unrotate;
       waypoints_unrotate.push_back(target_pose1);

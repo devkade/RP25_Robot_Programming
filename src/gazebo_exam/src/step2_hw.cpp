@@ -121,7 +121,7 @@ class PickAndLiftNode : public rclcpp::Node {
 public:
   PickAndLiftNode(const rclcpp::NodeOptions & node_options = rclcpp::NodeOptions())
   : Node("pick_and_lift_hw5", node_options) {
-    RCLCPP_INFO(this->get_logger(), "HW5: Pick-and-Place Node started - 8 objects");
+    RCLCPP_INFO(this->get_logger(), "HW5: Pick-and-Place Node started");
   }
 
   void run() {
@@ -154,68 +154,53 @@ public:
     initial_pose(arm);
     close_gripper(gripper, 0.0);
 
-    // Define all 8 objects with their initial positions
     Block objects[] = {
-      Block(0.05, 0.05, 0.06, 0,     Location(0.4, 0.1)),   // 1: box1
-      Block(0.05, 0.05, 0.06, 0,     Location(0.4, 0.0)),   // 2: box2
-      Block(0.05, 0.025, 0.06, 0,    Location(0.4, -0.1)),  // 3: box3 (narrow!)
-      Block(0.05, 0.05, 0.07, 0,     Location(0.5, -0.1)),  // 4: box4
-      Block(0.05, 0.05, 0.08, 0,     Location(0.5, 0.1)),   // 5: box5
-      Block(0.05, 0.05, 0.09, 0,     Location(0.6, 0.0)),   // 6: box6
-      Block(0.05, 0.05, 0.06, 0,     Location(0.6, 0.1)),   // 7: triangle
-      Block(0.05, 0.05, 0.06, 0.025, Location(0.5, 0.0)),   // 8: cylinder
+      Block(0.05, 0.05, 0.06, 0,     Location(0.4, 0.1)),   // box1
+      Block(0.05, 0.05, 0.06, 0,     Location(0.4, 0.0)),   // box2
+      Block(0.05, 0.025, 0.06, 0,    Location(0.4, -0.1)),  // box3
+      Block(0.05, 0.05, 0.09, 0,     Location(0.6, 0.0)),   // box4
+      Block(0.05, 0.05, 0.08, 0,     Location(0.5, 0.1)),   // cylinder
+      Block(0.05, 0.05, 0.07, 0,     Location(0.5, -0.1)),  // box5
+      Block(0.05, 0.05, 0.06, 0,     Location(0.6, 0.1)),   // triangle
+      Block(0.05, 0.05, 0.06, 0.025, Location(0.5, 0.0)),   // box6
     };
 
-    // Define target locations for all 8 objects (based on hint image)
     Location target_locations[] = {
-      Location(-0.15, 0.45),  // 1: box1
-      Location(-0.15, 0.55),  // 2: box2
-      Location(0.15, 0.45),   // 3: box3
-      Location(0.05, 0.55),   // 4: box4
-      Location(0.15, 0.55),   // 5: cylinder
-      Location(-0.05, 0.55),  // 6: box6
-      Location(0.05, 0.45),   // 7: triangle
-      Location(-0.05, 0.45),  // 8: box5
+      Location(-0.15, 0.45),  // box1
+      Location(-0.15, 0.55),  // box2
+      Location(0.15, 0.45),   // box3
+      Location(-0.05, 0.55),  // box4
+      Location(0.15, 0.55),   // cylinder
+      Location(0.05, 0.55),   // box5
+      Location(0.05, 0.45),   // triangle
+      Location(-0.05, 0.45),  // box6
     };
 
     // Define gripper values for each object
     double grip_values[] = {
-      0.024,  // 1: box1
-      0.024,  // 2: box2
-      0.012,  // 3: box3 (narrow - half width!)
-      0.024,  // 4: box4
-      0.024,  // 5: cylinder
-      0.024,  // 6: box6
-      0.024,  // 7: triangle
-      0.024,  // 8: box5
+      0.024,  // box1
+      0.024,  // box2
+      0.011,  // box3
+      0.024,  // box4
+      0.024,  // cylinder
+      0.024,  // box5
+      0.01335, // triangle
+      0.024,  // box6
     };
 
     // Define rotation angles for each object (in radians)
     double rotation_angles[] = {
-      0.0,     // 1: box1 (no rotation)
-      0.0,     // 2: box2 (no rotation)
-      M_PI/2,  // 3: box3 (90 degrees - narrow cube!)
-      0.0,     // 4: box4 (no rotation)
-      0.0,     // 5: cylinder (no rotation)
-      0.0,     // 6: box6 (no rotation)
-      0.0,     // 7: triangle (no rotation - change to M_PI/2 if needed)
-      0.0,     // 8: box5 (no rotation)
+      0.0,     // box1
+      0.0,     // box2 
+      M_PI/2,  // box3 
+      0.0,     // box4 
+      0.0,     // cylinder 
+      0.0,     // box5 
+      M_PI/7.9,// triangle
+      0.0,     // box6
     };
 
-    // DEBUG: Print all object positions
-    RCLCPP_INFO(this->get_logger(), "========================================");
-    RCLCPP_INFO(this->get_logger(), "DEBUGGING: Expected object positions:");
     for (int i = 0; i < 8; i++) {
-      RCLCPP_INFO(this->get_logger(), "  Object %d: (%.3f, %.3f)",
-                  i+1, objects[i].location.x, objects[i].location.y);
-    }
-    RCLCPP_INFO(this->get_logger(), "Check Gazebo to verify these positions!");
-    RCLCPP_INFO(this->get_logger(), "========================================");
-    rclcpp::sleep_for(std::chrono::seconds(3));  // Wait 3 seconds to check
-
-    // Process all 8 objects
-    for (int i = 0; i < 8; i++) {
-      RCLCPP_INFO(this->get_logger(), "========================================");
       RCLCPP_INFO(this->get_logger(), "Processing object %d/8", i + 1);
       RCLCPP_INFO(this->get_logger(), "  Initial: (%.3f, %.3f)",
                   objects[i].location.x, objects[i].location.y);

@@ -59,24 +59,37 @@ p.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=45, cameraPitch=-30, 
 
 ## 기본적인 Scene 코드 이후 부분을 제공된 Task를 수행하도록 구현하세요 ##
 
-# ===== 그리퍼 방향 정의 (MoveIt2 스타일: roll=-π/2로 위에서 접근) =====
-# MoveIt2에서는 list_to_pose(x, y, z, -M_PI/2, 0, 0)으로 위에서 접근
-# PyBullet에서는 [roll, pitch, yaw] = [-π/2, 0, 0] 또는 [π, 0, 0]
-DEFAULT_ORN = p.getQuaternionFromEuler([-math.pi/2, 0, 0])  # 위에서 아래로 (MoveIt2 스타일)
-TRIANGLE_ORN = p.getQuaternionFromEuler([-math.pi/2, 0, -math.pi/2])  # 삼각기둥용 (yaw 회전)
+# ===== Home Position 설정 및 End-Effector Orientation 획득 =====
+# home position 조인트 값으로 로봇 초기화
+HOME_JOINTS = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
+for i in range(7):
+    p.resetJointState(robot, i, HOME_JOINTS[i])
+
+# home position에서 end-effector (link 11)의 실제 orientation 획득
+link_state = p.getLinkState(robot, 11)
+DEFAULT_ORN = link_state[1]  # 위에서 아래를 바라보는 실제 quaternion
+
+# 삼각기둥용: DEFAULT_ORN에서 yaw만 -90도 회전
+# quaternion 곱셈으로 yaw 회전 적용
+yaw_rotation = p.getQuaternionFromEuler([0, 0, -math.pi/2])
+TRIANGLE_ORN = p.multiplyTransforms([0,0,0], DEFAULT_ORN, [0,0,0], yaw_rotation)[1]
+
+print(f"DEFAULT_ORN (from home position): {DEFAULT_ORN}")
+print(f"TRIANGLE_ORN (with yaw -90): {TRIANGLE_ORN}")
 
 # ===== 객체 데이터 정의 =====
-# (물체#, 변수명, pick_pos, place_pos, grasp_z, grip_width, orientation)
+# (물체#, 변수명, pick_pos, place_pos, grasp_z, grip_width, use_triangle_orn)
+# use_triangle_orn=False면 DEFAULT_ORN, True면 TRIANGLE_ORN 사용
 objects_data = [
     # 순서: 가까운 것부터, 어려운 것 마지막
-    (1, "box_4",      (0.3,  0.1),  (-0.15, 0.35), 0.69,  0.015, 0),
-    (2, "box_5",      (0.3,  0.0),  (-0.15, 0.25), 0.69,  0.015, 0),
-    (3, "box_6",      (0.3, -0.1),  ( 0.15, 0.25), 0.69,  0.015, 0),
-    (4, "box_2",      (0.4,  0.1),  ( 0.05, 0.35), 0.69,  0.015, 0),
-    (5, "cylinder_0", (0.4,  0.0),  (-0.05, 0.25), 0.69,  0.015, 0),
-    (6, "box_3",      (0.4, -0.1),  (-0.05, 0.35), 0.69,  0.015, 0),
-    (8, "box_0",      (0.5,  0.0),  ( 0.15, 0.35), 0.705, 0.015, 0),  # 높이 0.09
-    (7, "triangle",   (0.5,  0.1),  ( 0.05, 0.25), 0.69,  0.010, TRIANGLE_ORN), # 무게 5배
+    (1, "box_4",      (0.3,  0.1),  (-0.15, 0.35), 0.69,  0.015, False),
+    (2, "box_5",      (0.3,  0.0),  (-0.15, 0.25), 0.69,  0.015, False),
+    (3, "box_6",      (0.3, -0.1),  ( 0.15, 0.25), 0.69,  0.015, False),
+    (4, "box_2",      (0.4,  0.1),  ( 0.05, 0.35), 0.69,  0.015, False),
+    (5, "cylinder_0", (0.4,  0.0),  (-0.05, 0.25), 0.69,  0.015, False),
+    (6, "box_3",      (0.4, -0.1),  (-0.05, 0.35), 0.69,  0.015, False),
+    (8, "box_0",      (0.5,  0.0),  ( 0.15, 0.35), 0.705, 0.015, False),  # 높이 0.09
+    (7, "triangle",   (0.5,  0.1),  ( 0.05, 0.25), 0.69,  0.010, True),   # 무게 5배
 ]
 
 
@@ -291,9 +304,8 @@ def place_triangle_with_waypoints(place_pos, place_z=0.70):
 # ===== 초기 자세 설정 =====
 def set_home_position():
     """로봇을 home position으로 설정 (MoveIt2 스타일)"""
-    home_joints = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
     for i in range(7):
-        p.resetJointState(robot, i, home_joints[i])
+        p.resetJointState(robot, i, HOME_JOINTS[i])
 
 
 # ===== 메인 실행 =====
@@ -308,9 +320,12 @@ def main():
     place_z = 0.70
 
     # 8개 객체 처리
-    for obj_num, name, pick_pos, place_pos, grasp_z, grip_width, orn in objects_data:
+    for obj_num, name, pick_pos, place_pos, grasp_z, grip_width, use_triangle_orn in objects_data:
         print(f"\n=== Processing Object {obj_num}: {name} ===")
         print(f"Pick: {pick_pos} -> Place: {place_pos}")
+
+        # orientation 선택
+        orn = TRIANGLE_ORN if use_triangle_orn else DEFAULT_ORN
 
         if name == "triangle":
             # 삼각기둥: 특별 처리

@@ -145,163 +145,161 @@ def wait_for_motion(steps=None):
         time.sleep(SIM_SPEED)
 
 
-# ===== 일반 객체 Pick-Place 함수 =====
+# ===== 일반 객체 Pick-Place 함수 (MoveIt2 스타일) =====
 def pick_object(pick_pos, grasp_z, grip_width, orientation):
     """
-    일반 객체 집기 - 위에서 접근
+    일반 객체 집기 - MoveIt2 go_to_pose_goal 스타일
     1. 물체 위로 이동 (높이)
     2. 아래로 하강
     3. 그리퍼로 잡기
     4. 위로 들어올리기
     """
-    safe_z = 0.95  # 안전 높이 (충분히 높게)
+    safe_z = 0.95  # 안전 높이
     approach_z = grasp_z + 0.10  # 물체 바로 위
 
-    # 1. 안전 높이에서 물체 위치로 이동
-    print(f"  [1] Moving to safe height above object...")
-    move_to_position([pick_pos[0], pick_pos[1], safe_z], orientation)
-    wait_for_motion(MOTION_STEPS)
+    # 1. 안전 높이에서 물체 위치로 이동 (MoveIt2: go_to_pose_goal)
+    print(f"  [1] go_to_pose_goal: safe height above object")
+    go_to_pose_goal(pick_pos[0], pick_pos[1], safe_z, -math.pi/2, 0, 0)
 
     # 2. 물체 바로 위로 하강
-    print(f"  [2] Descending to approach height...")
-    move_to_position([pick_pos[0], pick_pos[1], approach_z], orientation)
-    wait_for_motion(MOTION_STEPS)
+    print(f"  [2] go_to_pose_goal: approach height")
+    go_to_pose_goal(pick_pos[0], pick_pos[1], approach_z, -math.pi/2, 0, 0)
 
     # 3. 잡는 높이까지 천천히 하강
-    print(f"  [3] Lowering to grasp height...")
-    move_to_position([pick_pos[0], pick_pos[1], grasp_z], orientation)
-    wait_for_motion(MOTION_STEPS)
+    print(f"  [3] go_to_pose_goal: grasp height")
+    go_to_pose_goal(pick_pos[0], pick_pos[1], grasp_z, -math.pi/2, 0, 0)
 
-    # 4. 그리퍼 닫기 (물체 잡기)
-    print(f"  [4] Closing gripper...")
+    # 4. 그리퍼 닫기 (MoveIt2: gripper_sample(gripper, 0.0))
+    print(f"  [4] gripper_sample: close")
     close_gripper(grip_width)
     wait_for_motion(GRIPPER_STEPS)
 
     # 5. 물체를 들어올리기
-    print(f"  [5] Lifting object...")
-    move_to_position([pick_pos[0], pick_pos[1], safe_z], orientation)
-    wait_for_motion(MOTION_STEPS)
+    print(f"  [5] go_to_pose_goal: lift")
+    go_to_pose_goal(pick_pos[0], pick_pos[1], safe_z, -math.pi/2, 0, 0)
 
 
 def place_object(place_pos, place_z, orientation):
     """
-    일반 객체 배치 - 위에서 접근
-    1. 목표 위치 위로 이동 (높이)
-    2. 아래로 하강
-    3. 그리퍼 열기 (놓기)
-    4. 위로 후퇴
+    일반 객체 배치 - MoveIt2 go_to_pose_goal 스타일
     """
     safe_z = 0.95  # 안전 높이
     approach_z = place_z + 0.10  # 배치 위치 바로 위
 
     # 6. 안전 높이에서 목표 위치로 이동
-    print(f"  [6] Moving to place position...")
-    move_to_position([place_pos[0], place_pos[1], safe_z], orientation)
-    wait_for_motion(MOTION_STEPS)
+    print(f"  [6] go_to_pose_goal: move to place")
+    go_to_pose_goal(place_pos[0], place_pos[1], safe_z, -math.pi/2, 0, 0)
 
     # 7. 배치 위치 위로 하강
-    print(f"  [7] Descending to approach height...")
-    move_to_position([place_pos[0], place_pos[1], approach_z], orientation)
-    wait_for_motion(MOTION_STEPS)
+    print(f"  [7] go_to_pose_goal: approach height")
+    go_to_pose_goal(place_pos[0], place_pos[1], approach_z, -math.pi/2, 0, 0)
 
     # 8. 배치 높이까지 천천히 하강
-    print(f"  [8] Lowering to place height...")
-    move_to_position([place_pos[0], place_pos[1], place_z], orientation)
-    wait_for_motion(MOTION_STEPS)
+    print(f"  [8] go_to_pose_goal: place height")
+    go_to_pose_goal(place_pos[0], place_pos[1], place_z, -math.pi/2, 0, 0)
 
-    # 9. 그리퍼 열기 (물체 놓기)
-    print(f"  [9] Opening gripper (releasing object)...")
+    # 9. 그리퍼 열기 (MoveIt2: gripper_sample(gripper, 0.07))
+    print(f"  [9] gripper_sample: open")
     open_gripper()
     wait_for_motion(GRIPPER_STEPS)
 
     # 10. 위로 후퇴
-    print(f"  [10] Retreating upward...")
-    move_to_position([place_pos[0], place_pos[1], safe_z], orientation)
-    wait_for_motion(MOTION_STEPS)
+    print(f"  [10] go_to_pose_goal: retreat")
+    go_to_pose_goal(place_pos[0], place_pos[1], safe_z, -math.pi/2, 0, 0)
 
 
-# ===== 삼각기둥 전용 함수 (다단계 이동) =====
+# ===== 삼각기둥 전용 함수 (MoveIt2 스타일, yaw 회전) =====
 def pick_triangle(pick_pos, grasp_z=0.69, grip_width=0.010):
     """
-    삼각기둥 전용 pick - 위에서 다단계 접근
-    무거운 물체이므로 더 천천히, 더 조심스럽게
+    삼각기둥 전용 pick - MoveIt2 스타일 (yaw=-π/2 회전)
+    무거운 물체이므로 더 천천히
     """
-    safe_z = 0.95  # 안전 높이
+    safe_z = 0.95
     approach_z = grasp_z + 0.10
+    # 삼각기둥은 yaw=-π/2로 회전해서 잡음
+    tri_yaw = -math.pi/2
 
     # 1. 안전 높이에서 물체 위로 이동
-    print(f"  [1] Moving to safe height above triangle...")
-    move_to_position([pick_pos[0], pick_pos[1], safe_z], TRIANGLE_ORN)
-    wait_for_motion(MOTION_STEPS * 2)  # 더 느리게
+    print(f"  [1] go_to_pose_goal: safe height (triangle)")
+    go_to_pose_goal(pick_pos[0], pick_pos[1], safe_z, -math.pi/2, 0, tri_yaw)
 
     # 2. 접근 높이로 하강
-    print(f"  [2] Descending to approach height...")
-    move_to_position([pick_pos[0], pick_pos[1], approach_z], TRIANGLE_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
+    print(f"  [2] go_to_pose_goal: approach height")
+    go_to_pose_goal(pick_pos[0], pick_pos[1], approach_z, -math.pi/2, 0, tri_yaw)
 
-    # 3. 잡는 높이까지 천천히 하강
-    print(f"  [3] Lowering to grasp height...")
-    move_to_position([pick_pos[0], pick_pos[1], grasp_z], TRIANGLE_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
+    # 3. 잡는 높이까지 하강
+    print(f"  [3] go_to_pose_goal: grasp height")
+    go_to_pose_goal(pick_pos[0], pick_pos[1], grasp_z, -math.pi/2, 0, tri_yaw)
 
     # 4. 그리퍼 닫기 (더 세게)
-    print(f"  [4] Closing gripper firmly...")
+    print(f"  [4] gripper_sample: close firmly")
     close_gripper(grip_width)
     wait_for_motion(GRIPPER_STEPS * 2)
 
-    # 5. 천천히 들어올리기
-    print(f"  [5] Lifting triangle slowly...")
-    move_to_position([pick_pos[0], pick_pos[1], safe_z], TRIANGLE_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
+    # 5. 들어올리기
+    print(f"  [5] go_to_pose_goal: lift")
+    go_to_pose_goal(pick_pos[0], pick_pos[1], safe_z, -math.pi/2, 0, tri_yaw)
 
 
 def place_triangle_with_waypoints(place_pos, place_z=0.70):
     """
-    삼각기둥 전용 place - waypoint로 안전하게 이동
+    삼각기둥 전용 place - MoveIt2 스타일
     """
     safe_z = 0.95
     approach_z = place_z + 0.10
+    tri_yaw = -math.pi/2
 
-    # 6. 안전 높이에서 목표 위치로 이동
-    print(f"  [6] Moving to place position...")
-    move_to_position([place_pos[0], place_pos[1], safe_z], TRIANGLE_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
+    # 6. 목표 위치로 이동
+    print(f"  [6] go_to_pose_goal: move to place")
+    go_to_pose_goal(place_pos[0], place_pos[1], safe_z, -math.pi/2, 0, tri_yaw)
 
     # 7. 접근 높이로 하강
-    print(f"  [7] Descending to approach height...")
-    move_to_position([place_pos[0], place_pos[1], approach_z], TRIANGLE_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
+    print(f"  [7] go_to_pose_goal: approach height")
+    go_to_pose_goal(place_pos[0], place_pos[1], approach_z, -math.pi/2, 0, tri_yaw)
 
-    # 8. 배치 높이까지 천천히 하강
-    print(f"  [8] Lowering to place height...")
-    move_to_position([place_pos[0], place_pos[1], place_z], TRIANGLE_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
+    # 8. 배치 높이까지 하강
+    print(f"  [8] go_to_pose_goal: place height")
+    go_to_pose_goal(place_pos[0], place_pos[1], place_z, -math.pi/2, 0, tri_yaw)
 
     # 9. 그리퍼 열기
-    print(f"  [9] Opening gripper...")
+    print(f"  [9] gripper_sample: open")
     open_gripper()
     wait_for_motion(GRIPPER_STEPS * 2)
 
     # 10. 위로 후퇴
-    print(f"  [10] Retreating upward...")
-    move_to_position([place_pos[0], place_pos[1], safe_z], TRIANGLE_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
+    print(f"  [10] go_to_pose_goal: retreat")
+    go_to_pose_goal(place_pos[0], place_pos[1], safe_z, -math.pi/2, 0, tri_yaw)
 
 
-# ===== 초기 자세 설정 =====
-def set_home_position():
-    """로봇을 home position으로 설정 (MoveIt2 스타일)"""
-    home_joints = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
-    for i in range(7):
-        p.resetJointState(robot, i, home_joints[i])
+# ===== MoveIt2 스타일 함수 =====
+def go_to_pose_goal(x, y, z, roll, pitch, yaw):
+    """
+    MoveIt2의 go_to_pose_goal 스타일 함수
+    list_to_pose(x, y, z, roll, pitch, yaw) 형태로 목표 위치 이동
+    """
+    target_orn = p.getQuaternionFromEuler([roll, pitch, yaw])
+    move_to_position([x, y, z], target_orn)
+    wait_for_motion(MOTION_STEPS)
+
+
+def move_to_initial_pose():
+    """
+    MoveIt2 move_sample의 초기 위치로 이동
+    list_to_pose(0.4, 0.2, 0.5, -M_PI/2, 0, 0)
+    """
+    print("Moving to initial pose (MoveIt2 style)...")
+    go_to_pose_goal(0.4, 0.0, 0.9, -math.pi/2, 0, 0)
 
 
 # ===== 메인 실행 =====
 def main():
-    # 초기화 - home position 설정 후 그리퍼 열기
-    print("Initializing robot to home position...")
-    set_home_position()
+    # 초기화 - MoveIt2 스타일 초기 위치로 이동
+    print("Initializing robot...")
     open_gripper()
+    wait_for_motion(GRIPPER_STEPS)
+
+    # MoveIt2 스타일 초기 위치로 이동
+    move_to_initial_pose()
     wait_for_motion(MOTION_STEPS)
 
     # place_z 추정값

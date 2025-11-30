@@ -98,6 +98,18 @@ GRIPPER_STEPS = 100  # 그리퍼 동작 스텝
 
 
 # ===== 헬퍼 함수 =====
+def euler_to_quaternion_moveit_style(roll, pitch, yaw):
+    """
+    MoveIt2 TF2와 동일한 방식으로 RPY를 Quaternion으로 변환
+
+    두 라이브러리 모두 동일한 extrinsic XYZ (fixed-axis) 컨벤션을 사용합니다.
+    따라서 [roll, pitch, yaw] 입력이 직접 호환됩니다.
+
+    반환값: (x, y, z, w) 형식의 quaternion (PyBullet 표준)
+    """
+    return p.getQuaternionFromEuler([roll, pitch, yaw])
+
+
 def open_gripper():
     """그리퍼 열기 (최대)"""
     p.setJointMotorControl2(robot, 9, p.POSITION_CONTROL, targetPosition=0.04, force=20)
@@ -154,6 +166,60 @@ def wait_for_motion(steps=None):
     for _ in range(steps):
         p.stepSimulation()
         time.sleep(SIM_SPEED)
+
+
+# ===== Cartesian Path 함수 (MoveIt2 스타일) =====
+def compute_cartesian_path(waypoints, eef_step=0.005):
+    """
+    MoveIt2의 computeCartesianPath를 PyBullet에서 구현
+
+    Args:
+        waypoints: [[x, y, z], ...] 형식의 위치 리스트
+        eef_step: end-effector 이동 단위 (기본 5mm, MoveIt2와 동일)
+
+    Returns:
+        보간된 waypoint 리스트
+    """
+    interpolated_waypoints = []
+
+    for i in range(len(waypoints) - 1):
+        start = waypoints[i]
+        end = waypoints[i + 1]
+
+        # 두 점 사이 거리
+        distance = math.sqrt(
+            (end[0] - start[0])**2 +
+            (end[1] - start[1])**2 +
+            (end[2] - start[2])**2
+        )
+
+        # 보간 포인트 수
+        num_steps = max(int(distance / eef_step), 1)
+
+        for j in range(num_steps + 1):
+            t = j / num_steps
+            point = [
+                start[0] + t * (end[0] - start[0]),
+                start[1] + t * (end[1] - start[1]),
+                start[2] + t * (end[2] - start[2])
+            ]
+            interpolated_waypoints.append(point)
+
+    return interpolated_waypoints
+
+
+def execute_cartesian_path(waypoints, orientation, step_delay=50):
+    """
+    보간된 Cartesian 경로 실행
+
+    Args:
+        waypoints: 보간된 위치 리스트
+        orientation: 유지할 end-effector orientation
+        step_delay: 각 waypoint 간 대기 스텝
+    """
+    for wp in waypoints:
+        move_to_position(wp, orientation)
+        wait_for_motion(step_delay)
 
 
 # ===== 일반 객체 Pick-Place 함수 =====
@@ -268,25 +334,46 @@ def pick_triangle(pick_pos, grasp_z=0.69, grip_width=0.010):
 
 def place_triangle_with_waypoints(place_pos, place_z=0.70):
     """
-    삼각기둥 전용 place - waypoint로 안전하게 이동
+    삼각기둥 전용 place - Cartesian path로 안전하게 이동
+    MoveIt2의 computeCartesianPath와 유사한 방식 사용
     """
     safe_z = 0.95
     approach_z = place_z + 0.10
 
-    # 6. 안전 높이에서 목표 위치로 이동
-    print(f"  [6] Moving to place position...")
-    move_to_position([place_pos[0], place_pos[1], safe_z], TRIANGLE_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
+    # 6. Cartesian path로 목표 위치까지 이동 (pick 위치 → 케이스)
+    # 삼각기둥 pick 위치: (0.5, 0.1)
+    current_pos = [0.5, 0.1, safe_z]  # pick 후 현재 위치 (대략)
 
-    # 7. 접근 높이로 하강
-    print(f"  [7] Descending to approach height...")
-    move_to_position([place_pos[0], place_pos[1], approach_z], TRIANGLE_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
+    # Waypoints 정의: 테이블 → 케이스 방향으로 안전하게 이동
+    waypoints = [
+        current_pos,
+        [0.35, 0.15, safe_z],  # WP1: 테이블 위 중간
+        [0.15, 0.20, safe_z],  # WP2: 케이스 방향
+        [place_pos[0], place_pos[1], safe_z],  # WP3: 목표 위
+    ]
 
-    # 8. 배치 높이까지 천천히 하강
-    print(f"  [8] Lowering to place height...")
-    move_to_position([place_pos[0], place_pos[1], place_z], TRIANGLE_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
+    print(f"  [6] Moving via Cartesian path to place position...")
+    # Cartesian path 계산 및 실행 (eef_step=0.01로 더 촘촘하게)
+    interpolated = compute_cartesian_path(waypoints, eef_step=0.01)
+    execute_cartesian_path(interpolated, TRIANGLE_ORN, step_delay=30)
+
+    # 7. 접근 높이로 하강 (Cartesian path)
+    print(f"  [7] Descending to approach height via Cartesian path...")
+    descent_waypoints = [
+        [place_pos[0], place_pos[1], safe_z],
+        [place_pos[0], place_pos[1], approach_z],
+    ]
+    descent_interpolated = compute_cartesian_path(descent_waypoints, eef_step=0.005)
+    execute_cartesian_path(descent_interpolated, TRIANGLE_ORN, step_delay=50)
+
+    # 8. 배치 높이까지 천천히 하강 (Cartesian path)
+    print(f"  [8] Lowering to place height via Cartesian path...")
+    final_descent = [
+        [place_pos[0], place_pos[1], approach_z],
+        [place_pos[0], place_pos[1], place_z],
+    ]
+    final_interpolated = compute_cartesian_path(final_descent, eef_step=0.002)
+    execute_cartesian_path(final_interpolated, TRIANGLE_ORN, step_delay=80)
 
     # 9. 그리퍼 열기
     print(f"  [9] Opening gripper...")

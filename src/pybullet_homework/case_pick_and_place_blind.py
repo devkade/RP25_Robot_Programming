@@ -339,31 +339,24 @@ def pick_triangle(pick_pos, grasp_z=0.69, grip_width=0.010):
     wait_for_motion(MOTION_STEPS * 2)
 
 
-def place_triangle_with_waypoints(pick_pos, place_pos, place_z=0.70):
+def place_triangle_with_waypoints(place_pos, place_z=0.70):
     """
-    객체 place - Cartesian path로 안전하게 이동
+    삼각기둥 전용 place - Cartesian path로 안전하게 이동
     MoveIt2의 computeCartesianPath와 유사한 방식 사용
-
-    Args:
-        pick_pos: 물체를 집은 위치 (x, y)
-        place_pos: 물체를 놓을 위치 (x, y)
-        place_z: 배치 높이
     """
     safe_z = 0.95
     approach_z = place_z + 0.10
 
     # 6. Cartesian path로 목표 위치까지 이동 (pick 위치 → 케이스)
-    current_pos = [pick_pos[0], pick_pos[1], safe_z]  # pick 후 현재 위치
+    # 삼각기둥 pick 위치: (0.5, 0.1)
+    current_pos = [0.5, 0.1, safe_z]  # pick 후 현재 위치 (대략)
 
-    # Waypoints 정의: 현재 위치 → 케이스 방향으로 안전하게 이동
-    # 중간 waypoint는 현재 위치와 목표 위치 사이를 보간
-    mid_x = (pick_pos[0] + place_pos[0]) / 2
-    mid_y = (pick_pos[1] + place_pos[1]) / 2
-
+    # Waypoints 정의: 테이블 → 케이스 방향으로 안전하게 이동
     waypoints = [
         current_pos,
-        [mid_x, mid_y, safe_z],  # WP1: 중간 지점
-        [place_pos[0], place_pos[1], safe_z],  # WP2: 목표 위
+        [0.35, 0.15, safe_z],  # WP1: 테이블 위 중간
+        [0.15, 0.20, safe_z],  # WP2: 케이스 방향
+        [place_pos[0], place_pos[1], safe_z],  # WP3: 목표 위
     ]
 
     print(f"  [6] Moving via Cartesian path to place position...")
@@ -378,7 +371,7 @@ def place_triangle_with_waypoints(pick_pos, place_pos, place_z=0.70):
         [place_pos[0], place_pos[1], approach_z],
     ]
     descent_interpolated = compute_cartesian_path(descent_waypoints, eef_step=0.01)
-    execute_cartesian_path(descent_interpolated, TRIANGLE_ORN, step_delay=50)
+    execute_cartesian_path(descent_interpolated, TRIANGLE_ORN, step_delay=30)
 
     # 8. 배치 높이까지 천천히 하강 (Cartesian path)
     print(f"  [8] Lowering to place height via Cartesian path...")
@@ -387,7 +380,7 @@ def place_triangle_with_waypoints(pick_pos, place_pos, place_z=0.70):
         [place_pos[0], place_pos[1], place_z],
     ]
     final_interpolated = compute_cartesian_path(final_descent, eef_step=0.01)
-    execute_cartesian_path(final_interpolated, TRIANGLE_ORN, step_delay=80)
+    execute_cartesian_path(final_interpolated, TRIANGLE_ORN, step_delay=30)
 
     # 9. 그리퍼 열기
     print(f"  [9] Opening gripper...")
@@ -427,13 +420,13 @@ def main():
         orn = TRIANGLE_ORN if use_triangle_orn else DEFAULT_ORN
 
         if name == "triangle":
-            # 삼각기둥: 특별 처리 (더 천천히)
+            # 삼각기둥: 특별 처리
             pick_triangle(pick_pos, grasp_z, grip_width)
-            place_triangle_with_waypoints(pick_pos, place_pos, place_z)
+            place_triangle_with_waypoints(place_pos, place_z)
         else:
-            # 일반 객체: Cartesian path로 안전하게 이동
+            # 일반 객체
             pick_object(pick_pos, grasp_z, grip_width, orn)
-            place_triangle_with_waypoints(pick_pos, place_pos, place_z)
+            place_object(place_pos, place_z, orn)
 
         print(f"Object {obj_num} ({name}) completed!")
 

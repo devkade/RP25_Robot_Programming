@@ -1,3 +1,9 @@
 {
+  "permissions": {
+    "allow": [
+      "mcp__zen__listmodels",
+      "mcp__zen__planner"
+    ]
+  },
   "outputStyle": "default"
 }

@@ -88,6 +88,7 @@ APPROACH_OFFSET = 0.10  # 접근 오프셋 (10cm 위에서 접근)
 SIM_SPEED = 1/480
 MOTION_STEPS = 200
 GRIPPER_STEPS = 100
+PAUSE_TIME = 0.5  # 각 동작 사이 정지 시간 (초)
 
 
 # ===== 헬퍼 함수 =====

@@ -92,6 +92,11 @@ PAUSE_TIME = 0.5  # 각 동작 사이 정지 시간 (초)
 
 
 # ===== 헬퍼 함수 =====
+def pause():
+    """동작 사이 정지"""
+    time.sleep(PAUSE_TIME)
+
+
 def open_gripper():
     """그리퍼 열기 (최대)"""
     p.setJointMotorControl2(robot, 9, p.POSITION_CONTROL, targetPosition=0.04, force=20)
@@ -229,26 +234,31 @@ def pick_and_place(pick_pos, place_pos, pick_z, place_z, grip_width):
     print(f"  [1] Opening gripper...")
     open_gripper()
     wait_for_motion(GRIPPER_STEPS)
+    pause()
 
     # 2. pick 위치의 10cm 위로 이동
     print(f"  [2] Moving to pick approach (10cm above)...")
     move_to_position([pick_pos[0], pick_pos[1], pick_approach_z], GRIPPER_ORN)
     wait_for_motion(MOTION_STEPS)
+    pause()
 
     # 3. pick 위치로 하강 (Z만 변경)
     print(f"  [3] Descending to pick position...")
     move_to_position([pick_pos[0], pick_pos[1], pick_z], GRIPPER_ORN)
     wait_for_motion(MOTION_STEPS)
+    pause()
 
     # 4. 그리퍼 닫기 (물체 잡기)
     print(f"  [4] Closing gripper (grasping)...")
     close_gripper(grip_width)
     wait_for_motion(GRIPPER_STEPS)
+    pause()
 
     # 5. 10cm 위로 들어올리기
     print(f"  [5] Lifting object (10cm up)...")
     move_to_position([pick_pos[0], pick_pos[1], pick_approach_z], GRIPPER_ORN)
     wait_for_motion(MOTION_STEPS)
+    pause()
 
     # === PLACE 단계 ===
 
@@ -264,16 +274,19 @@ def pick_and_place(pick_pos, place_pos, pick_z, place_z, grip_width):
     ]
     interpolated = compute_cartesian_path(waypoints, eef_step=0.01)
     execute_cartesian_path(interpolated, GRIPPER_ORN, step_delay=30)
+    pause()
 
     # 7. place 위치로 하강 (Z만 변경)
     print(f"  [7] Descending to place position...")
     move_to_position([place_pos[0], place_pos[1], place_z], GRIPPER_ORN)
     wait_for_motion(MOTION_STEPS)
+    pause()
 
     # 8. 그리퍼 열기 (물체 놓기)
     print(f"  [8] Opening gripper (releasing)...")
     open_gripper()
     wait_for_motion(GRIPPER_STEPS)
+    pause()
 
     # 9. Home으로 복귀
     go_to_home_position()

@@ -84,20 +84,20 @@ def get_gripper_orientation(yaw_deg=0):
 # (물체#, 변수명, pick_pos, place_pos, pick_z, place_z, grip_width, pick_yaw, place_yaw)
 # pick_yaw: 집을 때 그리퍼 회전 각도 (도), place_yaw: 놓을 때 그리퍼 회전 각도 (도)
 objects_data = [
-    (1, "box_4",      (0.3,  0.1),  (-0.15, 0.35), 0.69, 0.70, 0.015, 0, 0),
-    (2, "box_5",      (0.3,  0.0),  (-0.15, 0.25), 0.68, 0.70, 0.015, 0, 0),
-    (3, "box_6",      (0.3, -0.1),  ( 0.15, 0.25), 0.68, 0.70, 0.015, 90, 90),
+    (1, "box_4",      (0.3,  0.12),  (-0.15, 0.36), 0.68, 0.70, 0.015, 0, 0),
+    (2, "box_5",      (0.3,  0.02),  (-0.16, 0.25), 0.66, 0.70, 0.015, 90, 0),
+    (3, "box_6",      (0.3, -0.07),  ( 0.15, 0.255), 0.65, 0.70, 0.005, 90, 0),
     (4, "box_2",      (0.4,  0.1),  ( 0.05, 0.35), 0.68, 0.70, 0.015, 0, 0),
-    (5, "cylinder_0", (0.4,  0.0),  (-0.05, 0.25), 0.68, 0.70, 0.015, 0, 0),
-    (6, "box_3",      (0.4, -0.1),  (-0.05, 0.35), 0.68, 0.70, 0.015, 0, 0),
-    (7, "triangle",   (0.5,  0.1),  ( 0.05, 0.25), 0.68, 0.70, 0.010, 0, 0),
-    (8, "box_0",      (0.5,  0.0),  ( 0.15, 0.35), 0.69, 0.70, 0.015, 0, 0),
+    (5, "cylinder_0", (0.4,  0.0),  (-0.048, 0.26), 0.68, 0.70, 0.015, 0, 0),
+    (6, "box_3",      (0.4, -0.1),  (-0.062, 0.35), 0.68, 0.70, 0.015, 0, 0),
+    (7, "triangle",   (0.5,  0.1),  ( 0.07, 0.245), 0.68, 0.70, 0.010, 0, -39),
+    (8, "box_0",      (0.5,  0.0),  ( 0.16, 0.35), 0.69, 0.70, 0.015, 0, 0),
 ]
 
 # ===== 상수 정의 =====
-APPROACH_OFFSET = 0.20  # 접근 오프셋 (10cm 위에서 접근)
+APPROACH_OFFSET = 0.15  # 접근 오프셋 (10cm 위에서 접근)
 SIM_SPEED = 1/480
-MOTION_STEPS = 200
+MOTION_STEPS = 20
 GRIPPER_STEPS = 100
 PAUSE_TIME = 0.5  # 각 동작 사이 정지 시간 (초)
 
@@ -272,29 +272,24 @@ def pick_and_place(pick_pos, place_pos, pick_z, place_z, grip_width, pick_yaw=0,
     print(f"  [1] Opening gripper...")
     open_gripper()
     wait_for_motion(GRIPPER_STEPS)
-    pause()
 
     # 2. pick 위치의 10cm 위로 이동
     print(f"  [2] Moving to pick approach (10cm above)...")
     move_to_position([pick_pos[0], pick_pos[1], pick_approach_z], pick_orn)
     wait_for_motion(MOTION_STEPS)
-    pause()
 
     # 3. pick 위치로 수직 하강
     print(f"  [3] Descending vertically to pick position...")
     move_vertical(pick_pos[0], pick_pos[1], pick_approach_z, pick_z, pick_orn)
-    pause()
 
     # 4. 그리퍼 닫기 (물체 잡기)
     print(f"  [4] Closing gripper (grasping)...")
     close_gripper(grip_width)
     wait_for_motion(GRIPPER_STEPS)
-    pause()
 
     # 5. 수직으로 10cm 위로 들어올리기
     print(f"  [5] Lifting object vertically (10cm up)...")
     move_vertical(pick_pos[0], pick_pos[1], pick_z, pick_approach_z, pick_orn)
-    pause()
 
     # === PLACE 단계 ===
 
@@ -309,19 +304,19 @@ def pick_and_place(pick_pos, place_pos, pick_z, place_z, grip_width, pick_yaw=0,
         [place_pos[0], place_pos[1], place_approach_z],  # place 위치 10cm 위
     ]
     interpolated = compute_cartesian_path(waypoints, eef_step=0.01)
-    execute_cartesian_path(interpolated, place_orn, step_delay=30)
-    pause()
+    execute_cartesian_path(interpolated, place_orn, step_delay=10)
 
     # 7. place 위치로 수직 하강
     print(f"  [7] Descending vertically to place position...")
     move_vertical(place_pos[0], place_pos[1], place_approach_z, place_z, place_orn)
-    pause()
 
     # 8. 그리퍼 열기 (물체 놓기)
     print(f"  [8] Opening gripper (releasing)...")
     open_gripper()
     wait_for_motion(GRIPPER_STEPS)
-    pause()
+    
+    print(f"  [9] Descending vertically to place position...")
+    move_vertical(place_pos[0], place_pos[1], place_z, place_approach_z, place_orn)
 
     # 9. Home으로 복귀
     go_to_home_position()
@@ -344,7 +339,7 @@ def go_to_home_position():
             controlMode=p.POSITION_CONTROL,
             targetPosition=HOME_JOINTS[i],
             force=240,
-            maxVelocity=0.5
+            maxVelocity=1
         )
     wait_for_motion(MOTION_STEPS)
 
@@ -359,6 +354,7 @@ def main():
 
     # 8개 객체 처리
     for obj_num, name, pick_pos, place_pos, pick_z, place_z, grip_width, pick_yaw, place_yaw in objects_data:
+        #if obj_num == 1 or obj_num==2: continue
         print(f"\n=== Processing Object {obj_num}: {name} ===")
         print(f"Pick: {pick_pos}, z={pick_z}, yaw={pick_yaw}°")
         print(f"Place: {place_pos}, z={place_z}, yaw={place_yaw}°")

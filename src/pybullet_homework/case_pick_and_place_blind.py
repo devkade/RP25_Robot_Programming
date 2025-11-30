@@ -1,7 +1,6 @@
 import pybullet as p
 import pybullet_data
 import time
-import numpy as np
 import math
 
 p.connect(p.GUI)
@@ -60,9 +59,11 @@ p.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=45, cameraPitch=-30, 
 
 ## 기본적인 Scene 코드 이후 부분을 제공된 Task를 수행하도록 구현하세요 ##
 
-# ===== 그리퍼 방향 정의 =====
-DEFAULT_ORN = p.getQuaternionFromEuler([math.pi, 0, 0])  # 아래로 향함
-TRIANGLE_ORN = p.getQuaternionFromEuler([math.pi, 0, -math.pi/2])  # 삼각기둥용
+# ===== 그리퍼 방향 정의 (MoveIt2 스타일: roll=-π/2로 위에서 접근) =====
+# MoveIt2에서는 list_to_pose(x, y, z, -M_PI/2, 0, 0)으로 위에서 접근
+# PyBullet에서는 [roll, pitch, yaw] = [-π/2, 0, 0] 또는 [π, 0, 0]
+DEFAULT_ORN = p.getQuaternionFromEuler([-math.pi/2, 0, 0])  # 위에서 아래로 (MoveIt2 스타일)
+TRIANGLE_ORN = p.getQuaternionFromEuler([-math.pi/2, 0, -math.pi/2])  # 삼각기둥용 (yaw 회전)
 
 # ===== 객체 데이터 정의 =====
 # (물체#, 변수명, pick_pos, place_pos, grasp_z, grip_width, orientation)
@@ -99,12 +100,16 @@ def close_gripper(width):
 
 
 def move_to_position(target_pos, target_orn):
-    """IK 계산 후 조인트 이동 - 위에서 접근하도록 제약 추가"""
-    # IK에 조인트 범위 제약을 추가하여 위에서 접근하도록 유도
+    """
+    IK 계산 후 조인트 이동 - MoveIt2 스타일
+    위에서 접근하는 자세로 제약 추가
+    """
+    # Franka Panda 조인트 제한
     lower_limits = [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973]
     upper_limits = [2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973]
     joint_ranges = [5.8, 3.5, 5.8, 3.0, 5.8, 3.8, 5.8]
-    rest_poses = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]  # 위에서 접근하는 자세
+    # 위에서 접근하는 기본 자세 (MoveIt2 home position과 유사)
+    rest_poses = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
 
     joint_positions = p.calculateInverseKinematics(
         robot,
@@ -115,10 +120,11 @@ def move_to_position(target_pos, target_orn):
         upperLimits=upper_limits,
         jointRanges=joint_ranges,
         restPoses=rest_poses,
-        maxNumIterations=100,
-        residualThreshold=1e-5
+        maxNumIterations=200,
+        residualThreshold=1e-6
     )
 
+    # 조인트 이동 (느린 속도)
     for i in range(7):
         p.setJointMotorControl2(
             robot,
@@ -126,7 +132,7 @@ def move_to_position(target_pos, target_orn):
             controlMode=p.POSITION_CONTROL,
             targetPosition=joint_positions[i],
             force=240,
-            maxVelocity=1.0  # 속도 제한
+            maxVelocity=0.5  # 더 느린 속도
         )
 
 
@@ -282,10 +288,19 @@ def place_triangle_with_waypoints(place_pos, place_z=0.70):
     wait_for_motion(MOTION_STEPS * 2)
 
 
+# ===== 초기 자세 설정 =====
+def set_home_position():
+    """로봇을 home position으로 설정 (MoveIt2 스타일)"""
+    home_joints = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
+    for i in range(7):
+        p.resetJointState(robot, i, home_joints[i])
+
+
 # ===== 메인 실행 =====
 def main():
-    # 초기화 - 그리퍼 열고 대기
-    print("Initializing robot...")
+    # 초기화 - home position 설정 후 그리퍼 열기
+    print("Initializing robot to home position...")
+    set_home_position()
     open_gripper()
     wait_for_motion(MOTION_STEPS)
 

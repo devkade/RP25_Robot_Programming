@@ -209,6 +209,24 @@ def execute_cartesian_path(waypoints, orientation, step_delay=50):
         wait_for_motion(step_delay)
 
 
+def move_vertical(x, y, z_start, z_end, step_delay=30):
+    """
+    수직 이동 (Z축만 변경) - Cartesian path 사용
+
+    Args:
+        x, y: 고정된 X, Y 좌표
+        z_start: 시작 Z 높이
+        z_end: 목표 Z 높이
+        step_delay: 각 waypoint 간 대기 스텝
+    """
+    waypoints = [
+        [x, y, z_start],
+        [x, y, z_end],
+    ]
+    interpolated = compute_cartesian_path(waypoints, eef_step=0.005)
+    execute_cartesian_path(interpolated, GRIPPER_ORN, step_delay)
+
+
 # ===== Pick-Place 함수 =====
 def pick_and_place(pick_pos, place_pos, pick_z, place_z, grip_width):
     """
@@ -242,10 +260,9 @@ def pick_and_place(pick_pos, place_pos, pick_z, place_z, grip_width):
     wait_for_motion(MOTION_STEPS)
     pause()
 
-    # 3. pick 위치로 하강 (Z만 변경)
-    print(f"  [3] Descending to pick position...")
-    move_to_position([pick_pos[0], pick_pos[1], pick_z], GRIPPER_ORN)
-    wait_for_motion(MOTION_STEPS)
+    # 3. pick 위치로 수직 하강
+    print(f"  [3] Descending vertically to pick position...")
+    move_vertical(pick_pos[0], pick_pos[1], pick_approach_z, pick_z)
     pause()
 
     # 4. 그리퍼 닫기 (물체 잡기)
@@ -254,10 +271,9 @@ def pick_and_place(pick_pos, place_pos, pick_z, place_z, grip_width):
     wait_for_motion(GRIPPER_STEPS)
     pause()
 
-    # 5. 10cm 위로 들어올리기
-    print(f"  [5] Lifting object (10cm up)...")
-    move_to_position([pick_pos[0], pick_pos[1], pick_approach_z], GRIPPER_ORN)
-    wait_for_motion(MOTION_STEPS)
+    # 5. 수직으로 10cm 위로 들어올리기
+    print(f"  [5] Lifting object vertically (10cm up)...")
+    move_vertical(pick_pos[0], pick_pos[1], pick_z, pick_approach_z)
     pause()
 
     # === PLACE 단계 ===
@@ -276,10 +292,9 @@ def pick_and_place(pick_pos, place_pos, pick_z, place_z, grip_width):
     execute_cartesian_path(interpolated, GRIPPER_ORN, step_delay=30)
     pause()
 
-    # 7. place 위치로 하강 (Z만 변경)
-    print(f"  [7] Descending to place position...")
-    move_to_position([place_pos[0], place_pos[1], place_z], GRIPPER_ORN)
-    wait_for_motion(MOTION_STEPS)
+    # 7. place 위치로 수직 하강
+    print(f"  [7] Descending vertically to place position...")
+    move_vertical(place_pos[0], place_pos[1], place_approach_z, place_z)
     pause()
 
     # 8. 그리퍼 열기 (물체 놓기)

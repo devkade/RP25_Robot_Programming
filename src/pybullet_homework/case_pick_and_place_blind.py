@@ -370,7 +370,7 @@ def place_triangle_with_waypoints(place_pos, place_z=0.70):
         [place_pos[0], place_pos[1], safe_z],
         [place_pos[0], place_pos[1], approach_z],
     ]
-    descent_interpolated = compute_cartesian_path(descent_waypoints, eef_step=0.005)
+    descent_interpolated = compute_cartesian_path(descent_waypoints, eef_step=0.01)
     execute_cartesian_path(descent_interpolated, TRIANGLE_ORN, step_delay=50)
 
     # 8. 배치 높이까지 천천히 하강 (Cartesian path)
@@ -379,7 +379,7 @@ def place_triangle_with_waypoints(place_pos, place_z=0.70):
         [place_pos[0], place_pos[1], approach_z],
         [place_pos[0], place_pos[1], place_z],
     ]
-    final_interpolated = compute_cartesian_path(final_descent, eef_step=0.002)
+    final_interpolated = compute_cartesian_path(final_descent, eef_step=0.01)
     execute_cartesian_path(final_interpolated, TRIANGLE_ORN, step_delay=80)
 
     # 9. 그리퍼 열기

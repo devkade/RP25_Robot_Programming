@@ -65,15 +65,17 @@ HOME_JOINTS = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
 for i in range(7):
     p.resetJointState(robot, i, HOME_JOINTS[i])
 
-# MoveIt2 스타일: RPY로 명시적 orientation 설정
-# 위에서 아래로 집는 자세: Roll = -π/2 (그리퍼가 아래를 향함)
-DEFAULT_ORN = p.getQuaternionFromEuler([-math.pi/2, 0, 0])
+# Home position에서 end-effector의 실제 orientation 획득
+# Franka Panda의 home position이 이미 위에서 아래를 향하는 자세임
+link_state = p.getLinkState(robot, 11)
+DEFAULT_ORN = link_state[1]  # Home position의 실제 quaternion 사용
 
-# 삼각기둥용: Roll = -π/2 (아래 향함) + Yaw = -π/2 (90도 회전)
-TRIANGLE_ORN = p.getQuaternionFromEuler([-math.pi/2, 0, -math.pi/2])
+# 삼각기둥용: DEFAULT_ORN에서 yaw만 -90도 회전 (quaternion 곱셈)
+yaw_rotation = p.getQuaternionFromEuler([0, 0, -math.pi/2])
+TRIANGLE_ORN = p.multiplyTransforms([0,0,0], DEFAULT_ORN, [0,0,0], yaw_rotation)[1]
 
-print(f"DEFAULT_ORN (MoveIt2 style, roll=-π/2): {DEFAULT_ORN}")
-print(f"TRIANGLE_ORN (roll=-π/2, yaw=-π/2): {TRIANGLE_ORN}")
+print(f"DEFAULT_ORN (from home position): {DEFAULT_ORN}")
+print(f"TRIANGLE_ORN (with yaw -90): {TRIANGLE_ORN}")
 
 # ===== 객체 데이터 정의 =====
 # (물체#, 변수명, pick_pos, place_pos, grasp_z, grip_width, use_triangle_orn)

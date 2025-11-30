@@ -309,12 +309,18 @@ def pick_triangle(pick_pos, grasp_z=0.69, grip_width=0.010):
     """
     삼각기둥 전용 pick - 위에서 다단계 접근
     무거운 물체이므로 더 천천히, 더 조심스럽게
+    Home position에서 시작하여 물체를 집음
     """
     safe_z = 0.95  # 안전 높이
     approach_z = grasp_z + 0.10
 
+    # 0. 그리퍼 열기 (집기 준비)
+    print(f"  [0] Opening gripper...")
+    open_gripper()
+    wait_for_motion(GRIPPER_STEPS)
+
     # 1. 안전 높이에서 물체 위로 이동
-    print(f"  [1] Moving to safe height above triangle...")
+    print(f"  [1] Moving to safe height above object...")
     move_to_position([pick_pos[0], pick_pos[1], safe_z], TRIANGLE_ORN)
     wait_for_motion(MOTION_STEPS * 2)  # 더 느리게
 
@@ -339,24 +345,31 @@ def pick_triangle(pick_pos, grasp_z=0.69, grip_width=0.010):
     wait_for_motion(MOTION_STEPS * 2)
 
 
-def place_triangle_with_waypoints(place_pos, place_z=0.70):
+def place_triangle_with_waypoints(pick_pos, place_pos, place_z=0.70):
     """
     삼각기둥 전용 place - Cartesian path로 안전하게 이동
     MoveIt2의 computeCartesianPath와 유사한 방식 사용
+
+    Args:
+        pick_pos: pick한 위치 (x, y) - waypoint 시작점으로 사용
+        place_pos: 배치할 위치 (x, y)
+        place_z: 배치 높이
     """
     safe_z = 0.95
     approach_z = place_z + 0.10
 
     # 6. Cartesian path로 목표 위치까지 이동 (pick 위치 → 케이스)
-    # 삼각기둥 pick 위치: (0.5, 0.1)
-    current_pos = [0.5, 0.1, safe_z]  # pick 후 현재 위치 (대략)
+    current_pos = [pick_pos[0], pick_pos[1], safe_z]  # pick 후 현재 위치
 
     # Waypoints 정의: 테이블 → 케이스 방향으로 안전하게 이동
+    # 중간점을 pick 위치와 place 위치 사이로 동적 계산
+    mid_x = (pick_pos[0] + place_pos[0]) / 2
+    mid_y = (pick_pos[1] + place_pos[1]) / 2
+
     waypoints = [
         current_pos,
-        [0.35, 0.15, safe_z],  # WP1: 테이블 위 중간
-        [0.15, 0.20, safe_z],  # WP2: 케이스 방향
-        [place_pos[0], place_pos[1], safe_z],  # WP3: 목표 위
+        [mid_x, mid_y, safe_z],  # WP1: 중간점
+        [place_pos[0], place_pos[1], safe_z],  # WP2: 목표 위
     ]
 
     print(f"  [6] Moving via Cartesian path to place position...")
@@ -392,12 +405,30 @@ def place_triangle_with_waypoints(place_pos, place_z=0.70):
     move_to_position([place_pos[0], place_pos[1], safe_z], TRIANGLE_ORN)
     wait_for_motion(MOTION_STEPS * 2)
 
+    # 11. Home position으로 복귀
+    go_to_home_position()
+
 
 # ===== 초기 자세 설정 =====
 def set_home_position():
-    """로봇을 home position으로 설정 (MoveIt2 스타일)"""
+    """로봇을 home position으로 즉시 설정 (resetJointState 사용)"""
     for i in range(7):
         p.resetJointState(robot, i, HOME_JOINTS[i])
+
+
+def go_to_home_position():
+    """로봇을 home position으로 부드럽게 이동 (position control 사용)"""
+    print(f"  [Home] Returning to home position...")
+    for i in range(7):
+        p.setJointMotorControl2(
+            robot,
+            jointIndex=i,
+            controlMode=p.POSITION_CONTROL,
+            targetPosition=HOME_JOINTS[i],
+            force=240,
+            maxVelocity=0.5
+        )
+    wait_for_motion(MOTION_STEPS)
 
 
 # ===== 메인 실행 =====
@@ -416,17 +447,9 @@ def main():
         print(f"\n=== Processing Object {obj_num}: {name} ===")
         print(f"Pick: {pick_pos} -> Place: {place_pos}")
 
-        # orientation 선택
-        orn = TRIANGLE_ORN if use_triangle_orn else DEFAULT_ORN
-
-        if name == "triangle":
-            # 삼각기둥: 특별 처리
-            pick_triangle(pick_pos, grasp_z, grip_width)
-            place_triangle_with_waypoints(place_pos, place_z)
-        else:
-            # 일반 객체
-            pick_object(pick_pos, grasp_z, grip_width, orn)
-            place_object(place_pos, place_z, orn)
+        # Home → Pick → Place → Home 사이클
+        pick_triangle(pick_pos, grasp_z, grip_width)
+        place_triangle_with_waypoints(pick_pos, place_pos, place_z)
 
         print(f"Object {obj_num} ({name}) completed!")
 

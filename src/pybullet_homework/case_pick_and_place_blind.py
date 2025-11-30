@@ -59,42 +59,28 @@ p.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=45, cameraPitch=-30, 
 
 ## 기본적인 Scene 코드 이후 부분을 제공된 Task를 수행하도록 구현하세요 ##
 
-# ===== Home Position 설정 및 End-Effector Orientation (MoveIt2 스타일) =====
-# home position 조인트 값으로 로봇 초기화
+# ===== Home Position 설정 및 End-Effector Orientation =====
 HOME_JOINTS = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
 for i in range(7):
     p.resetJointState(robot, i, HOME_JOINTS[i])
 
-# Home position에서 end-effector의 실제 orientation 획득
+# Home position에서 end-effector orientation 획득 후 yaw -90도 회전
 link_state = p.getLinkState(robot, 11)
-HOME_ORN = link_state[1]  # Home position의 실제 quaternion
-
-# 삼각기둥용 orientation (yaw -90도) - 이것이 위에서 아래로 올바르게 집는 자세
+home_orn = link_state[1]
 yaw_rotation = p.getQuaternionFromEuler([0, 0, -math.pi/2])
-TRIANGLE_ORN = p.multiplyTransforms([0,0,0], HOME_ORN, [0,0,0], yaw_rotation)[1]
-
-# 일반 객체용: TRIANGLE_ORN에서 yaw +90도 (원래 HOME_ORN 방향이 아닌 올바른 자세)
-# 실험 결과 TRIANGLE_ORN이 올바르므로, 일반 객체도 동일하게 사용
-DEFAULT_ORN = TRIANGLE_ORN  # 일반 객체도 같은 orientation 사용
-
-print(f"HOME_ORN (from home position): {HOME_ORN}")
-print(f"DEFAULT_ORN (same as TRIANGLE): {DEFAULT_ORN}")
-print(f"TRIANGLE_ORN (yaw -90): {TRIANGLE_ORN}")
+GRIPPER_ORN = p.multiplyTransforms([0,0,0], home_orn, [0,0,0], yaw_rotation)[1]
 
 # ===== 객체 데이터 정의 =====
-# (물체#, 변수명, pick_pos, place_pos, grasp_z, grip_width, use_triangle_orn)
-# 문서 HW6_Task_Analysis.md 기준 좌표
-# use_triangle_orn: 모든 객체에 TRIANGLE_ORN 사용 (위에서 아래로 올바르게 집는 자세)
+# (물체#, 변수명, pick_pos, place_pos, grasp_z, grip_width)
 objects_data = [
-    # 순서: 가까운 것부터, 어려운 것 마지막 (문서 권장 순서)
-    (1, "box_4",      (0.3,  0.1),  (-0.15, 0.35), 0.69,  0.015, True),  # 물체1
-    (2, "box_5",      (0.3,  0.0),  (-0.15, 0.25), 0.69,  0.015, True),  # 물체2
-    (3, "box_6",      (0.3, -0.1),  ( 0.15, 0.25), 0.69,  0.015, True),  # 물체3
-    (4, "box_2",      (0.4,  0.1),  ( 0.05, 0.35), 0.69,  0.015, True),  # 물체4
-    (5, "cylinder_0", (0.4,  0.0),  (-0.05, 0.25), 0.69,  0.015, True),  # 물체5
-    (6, "box_3",      (0.4, -0.1),  (-0.05, 0.35), 0.69,  0.015, True),  # 물체6
-    (7, "triangle",   (0.5,  0.1),  ( 0.05, 0.25), 0.69,  0.010, True),  # 물체7 - 무게 5배
-    (8, "box_0",      (0.5,  0.0),  ( 0.15, 0.35), 0.705, 0.015, True),  # 물체8 - 높이 0.09
+    (1, "box_4",      (0.3,  0.1),  (-0.15, 0.35), 0.5,  0.015),
+    (2, "box_5",      (0.3,  0.0),  (-0.15, 0.25), 0.5,  0.015),
+    (3, "box_6",      (0.3, -0.1),  ( 0.15, 0.25), 0.5,  0.015),
+    (4, "box_2",      (0.4,  0.1),  ( 0.05, 0.35), 0.5,  0.015),
+    (5, "cylinder_0", (0.4,  0.0),  (-0.05, 0.25), 0.5,  0.015),
+    (6, "box_3",      (0.4, -0.1),  (-0.05, 0.35), 0.5,  0.015),
+    (7, "triangle",   (0.5,  0.1),  ( 0.05, 0.25), 0.69,  0.010),
+    (8, "box_0",      (0.5,  0.0),  ( 0.15, 0.35), 0.705, 0.015),
 ]
 
 
@@ -105,18 +91,6 @@ GRIPPER_STEPS = 100  # 그리퍼 동작 스텝
 
 
 # ===== 헬퍼 함수 =====
-def euler_to_quaternion_moveit_style(roll, pitch, yaw):
-    """
-    MoveIt2 TF2와 동일한 방식으로 RPY를 Quaternion으로 변환
-
-    두 라이브러리 모두 동일한 extrinsic XYZ (fixed-axis) 컨벤션을 사용합니다.
-    따라서 [roll, pitch, yaw] 입력이 직접 호환됩니다.
-
-    반환값: (x, y, z, w) 형식의 quaternion (PyBullet 표준)
-    """
-    return p.getQuaternionFromEuler([roll, pitch, yaw])
-
-
 def open_gripper():
     """그리퍼 열기 (최대)"""
     p.setJointMotorControl2(robot, 9, p.POSITION_CONTROL, targetPosition=0.04, force=20)
@@ -229,88 +203,9 @@ def execute_cartesian_path(waypoints, orientation, step_delay=50):
         wait_for_motion(step_delay)
 
 
-# ===== 일반 객체 Pick-Place 함수 =====
-def pick_object(pick_pos, grasp_z, grip_width, orientation):
-    """
-    일반 객체 집기 - 위에서 접근
-    1. 물체 위로 이동 (높이)
-    2. 아래로 하강
-    3. 그리퍼로 잡기
-    4. 위로 들어올리기
-    """
-    safe_z = 0.95  # 안전 높이 (충분히 높게)
-    approach_z = grasp_z + 0.10  # 물체 바로 위
-
-    # 1. 안전 높이에서 물체 위치로 이동
-    print(f"  [1] Moving to safe height above object...")
-    move_to_position([pick_pos[0], pick_pos[1], safe_z], orientation)
-    wait_for_motion(MOTION_STEPS)
-
-    # 2. 물체 바로 위로 하강
-    print(f"  [2] Descending to approach height...")
-    move_to_position([pick_pos[0], pick_pos[1], approach_z], orientation)
-    wait_for_motion(MOTION_STEPS)
-
-    # 3. 잡는 높이까지 천천히 하강
-    print(f"  [3] Lowering to grasp height...")
-    move_to_position([pick_pos[0], pick_pos[1], grasp_z], orientation)
-    wait_for_motion(MOTION_STEPS)
-
-    # 4. 그리퍼 닫기 (물체 잡기)
-    print(f"  [4] Closing gripper...")
-    close_gripper(grip_width)
-    wait_for_motion(GRIPPER_STEPS)
-
-    # 5. 물체를 들어올리기
-    print(f"  [5] Lifting object...")
-    move_to_position([pick_pos[0], pick_pos[1], safe_z], orientation)
-    wait_for_motion(MOTION_STEPS)
-
-
-def place_object(place_pos, place_z, orientation):
-    """
-    일반 객체 배치 - 위에서 접근
-    1. 목표 위치 위로 이동 (높이)
-    2. 아래로 하강
-    3. 그리퍼 열기 (놓기)
-    4. 위로 후퇴
-    """
-    safe_z = 0.95  # 안전 높이
-    approach_z = place_z + 0.10  # 배치 위치 바로 위
-
-    # 6. 안전 높이에서 목표 위치로 이동
-    print(f"  [6] Moving to place position...")
-    move_to_position([place_pos[0], place_pos[1], safe_z], orientation)
-    wait_for_motion(MOTION_STEPS)
-
-    # 7. 배치 위치 위로 하강
-    print(f"  [7] Descending to approach height...")
-    move_to_position([place_pos[0], place_pos[1], approach_z], orientation)
-    wait_for_motion(MOTION_STEPS)
-
-    # 8. 배치 높이까지 천천히 하강
-    print(f"  [8] Lowering to place height...")
-    move_to_position([place_pos[0], place_pos[1], place_z], orientation)
-    wait_for_motion(MOTION_STEPS)
-
-    # 9. 그리퍼 열기 (물체 놓기)
-    print(f"  [9] Opening gripper (releasing object)...")
-    open_gripper()
-    wait_for_motion(GRIPPER_STEPS)
-
-    # 10. 위로 후퇴
-    print(f"  [10] Retreating upward...")
-    move_to_position([place_pos[0], place_pos[1], safe_z], orientation)
-    wait_for_motion(MOTION_STEPS)
-
-
-# ===== 삼각기둥 전용 함수 (다단계 이동) =====
-def pick_triangle(pick_pos, grasp_z=0.69, grip_width=0.010):
-    """
-    삼각기둥 전용 pick - 위에서 다단계 접근
-    무거운 물체이므로 더 천천히, 더 조심스럽게
-    Home position에서 시작하여 물체를 집음
-    """
+# ===== Pick-Place 함수 =====
+def pick_object(pick_pos, grasp_z=0.69, grip_width=0.010):
+    """물체 집기 - Home position에서 시작하여 위에서 접근"""
     safe_z = 0.95  # 안전 높이
     approach_z = grasp_z + 0.10
 
@@ -321,17 +216,17 @@ def pick_triangle(pick_pos, grasp_z=0.69, grip_width=0.010):
 
     # 1. 안전 높이에서 물체 위로 이동
     print(f"  [1] Moving to safe height above object...")
-    move_to_position([pick_pos[0], pick_pos[1], safe_z], TRIANGLE_ORN)
+    move_to_position([pick_pos[0], pick_pos[1], safe_z], GRIPPER_ORN)
     wait_for_motion(MOTION_STEPS * 2)  # 더 느리게
 
     # 2. 접근 높이로 하강
     print(f"  [2] Descending to approach height...")
-    move_to_position([pick_pos[0], pick_pos[1], approach_z], TRIANGLE_ORN)
+    move_to_position([pick_pos[0], pick_pos[1], approach_z], GRIPPER_ORN)
     wait_for_motion(MOTION_STEPS * 2)
 
     # 3. 잡는 높이까지 천천히 하강
     print(f"  [3] Lowering to grasp height...")
-    move_to_position([pick_pos[0], pick_pos[1], grasp_z], TRIANGLE_ORN)
+    move_to_position([pick_pos[0], pick_pos[1], grasp_z], GRIPPER_ORN)
     wait_for_motion(MOTION_STEPS * 2)
 
     # 4. 그리퍼 닫기 (더 세게)
@@ -341,20 +236,12 @@ def pick_triangle(pick_pos, grasp_z=0.69, grip_width=0.010):
 
     # 5. 천천히 들어올리기
     print(f"  [5] Lifting triangle slowly...")
-    move_to_position([pick_pos[0], pick_pos[1], safe_z], TRIANGLE_ORN)
+    move_to_position([pick_pos[0], pick_pos[1], safe_z], GRIPPER_ORN)
     wait_for_motion(MOTION_STEPS * 2)
 
 
-def place_triangle_with_waypoints(pick_pos, place_pos, place_z=0.70):
-    """
-    삼각기둥 전용 place - Cartesian path로 안전하게 이동
-    MoveIt2의 computeCartesianPath와 유사한 방식 사용
-
-    Args:
-        pick_pos: pick한 위치 (x, y) - waypoint 시작점으로 사용
-        place_pos: 배치할 위치 (x, y)
-        place_z: 배치 높이
-    """
+def place_object(pick_pos, place_pos, place_z=0.70):
+    """물체 배치 - Cartesian path로 이동 후 Home position으로 복귀"""
     safe_z = 0.95
     approach_z = place_z + 0.10
 
@@ -375,7 +262,7 @@ def place_triangle_with_waypoints(pick_pos, place_pos, place_z=0.70):
     print(f"  [6] Moving via Cartesian path to place position...")
     # Cartesian path 계산 및 실행 (eef_step=0.01로 더 촘촘하게)
     interpolated = compute_cartesian_path(waypoints, eef_step=0.01)
-    execute_cartesian_path(interpolated, TRIANGLE_ORN, step_delay=30)
+    execute_cartesian_path(interpolated, GRIPPER_ORN, step_delay=30)
 
     # 7. 접근 높이로 하강 (Cartesian path)
     print(f"  [7] Descending to approach height via Cartesian path...")
@@ -384,7 +271,7 @@ def place_triangle_with_waypoints(pick_pos, place_pos, place_z=0.70):
         [place_pos[0], place_pos[1], approach_z],
     ]
     descent_interpolated = compute_cartesian_path(descent_waypoints, eef_step=0.01)
-    execute_cartesian_path(descent_interpolated, TRIANGLE_ORN, step_delay=30)
+    execute_cartesian_path(descent_interpolated, GRIPPER_ORN, step_delay=30)
 
     # 8. 배치 높이까지 천천히 하강 (Cartesian path)
     print(f"  [8] Lowering to place height via Cartesian path...")
@@ -393,7 +280,7 @@ def place_triangle_with_waypoints(pick_pos, place_pos, place_z=0.70):
         [place_pos[0], place_pos[1], place_z],
     ]
     final_interpolated = compute_cartesian_path(final_descent, eef_step=0.01)
-    execute_cartesian_path(final_interpolated, TRIANGLE_ORN, step_delay=30)
+    execute_cartesian_path(final_interpolated, GRIPPER_ORN, step_delay=30)
 
     # 9. 그리퍼 열기
     print(f"  [9] Opening gripper...")
@@ -402,7 +289,7 @@ def place_triangle_with_waypoints(pick_pos, place_pos, place_z=0.70):
 
     # 10. 위로 후퇴
     print(f"  [10] Retreating upward...")
-    move_to_position([place_pos[0], place_pos[1], safe_z], TRIANGLE_ORN)
+    move_to_position([place_pos[0], place_pos[1], safe_z], GRIPPER_ORN)
     wait_for_motion(MOTION_STEPS * 2)
 
     # 11. Home position으로 복귀
@@ -443,13 +330,13 @@ def main():
     place_z = 0.70
 
     # 8개 객체 처리
-    for obj_num, name, pick_pos, place_pos, grasp_z, grip_width, use_triangle_orn in objects_data:
+    for obj_num, name, pick_pos, place_pos, grasp_z, grip_width in objects_data:
         print(f"\n=== Processing Object {obj_num}: {name} ===")
         print(f"Pick: {pick_pos} -> Place: {place_pos}")
 
         # Home → Pick → Place → Home 사이클
-        pick_triangle(pick_pos, grasp_z, grip_width)
-        place_triangle_with_waypoints(pick_pos, place_pos, place_z)
+        pick_object(pick_pos, grasp_z, grip_width)
+        place_object(pick_pos, place_pos, place_z)
 
         print(f"Object {obj_num} ({name}) completed!")
 

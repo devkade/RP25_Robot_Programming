@@ -71,23 +71,23 @@ yaw_rotation = p.getQuaternionFromEuler([0, 0, -math.pi/2])
 GRIPPER_ORN = p.multiplyTransforms([0,0,0], home_orn, [0,0,0], yaw_rotation)[1]
 
 # ===== 객체 데이터 정의 =====
-# (물체#, 변수명, pick_pos, place_pos, grasp_z, grip_width)
+# (물체#, 변수명, pick_pos, place_pos, pick_z, place_z, grip_width)
 objects_data = [
-    (1, "box_4",      (0.3,  0.1),  (-0.15, 0.35), 0.69,  0.015),
-    (2, "box_5",      (0.3,  0.0),  (-0.15, 0.25), 0.69,  0.015),
-    (3, "box_6",      (0.3, -0.1),  ( 0.15, 0.25), 0.69,  0.015),
-    (4, "box_2",      (0.4,  0.1),  ( 0.05, 0.35), 0.69,  0.015),
-    (5, "cylinder_0", (0.4,  0.0),  (-0.05, 0.25), 0.69,  0.015),
-    (6, "box_3",      (0.4, -0.1),  (-0.05, 0.35), 0.69,  0.015),
-    (7, "triangle",   (0.5,  0.1),  ( 0.05, 0.25), 0.69,  0.010),
-    (8, "box_0",      (0.5,  0.0),  ( 0.15, 0.35), 0.705, 0.015),
+    (1, "box_4",      (0.3,  0.1),  (-0.15, 0.35), 0.68, 0.70, 0.015),
+    (2, "box_5",      (0.3,  0.0),  (-0.15, 0.25), 0.68, 0.70, 0.015),
+    (3, "box_6",      (0.3, -0.1),  ( 0.15, 0.25), 0.68, 0.70, 0.015),
+    (4, "box_2",      (0.4,  0.1),  ( 0.05, 0.35), 0.68, 0.70, 0.015),
+    (5, "cylinder_0", (0.4,  0.0),  (-0.05, 0.25), 0.68, 0.70, 0.015),
+    (6, "box_3",      (0.4, -0.1),  (-0.05, 0.35), 0.68, 0.70, 0.015),
+    (7, "triangle",   (0.5,  0.1),  ( 0.05, 0.25), 0.68, 0.70, 0.010),
+    (8, "box_0",      (0.5,  0.0),  ( 0.15, 0.35), 0.69, 0.70, 0.015),
 ]
 
-
-# ===== 속도 설정 (느리게) =====
-SIM_SPEED = 1/480  # 시뮬레이션 속도 (느리게)
-MOTION_STEPS = 200  # 기본 동작 스텝 (늘림)
-GRIPPER_STEPS = 100  # 그리퍼 동작 스텝
+# ===== 상수 정의 =====
+APPROACH_OFFSET = 0.10  # 접근 오프셋 (10cm 위에서 접근)
+SIM_SPEED = 1/480
+MOTION_STEPS = 200
+GRIPPER_STEPS = 100
 
 
 # ===== 헬퍼 함수 =====
@@ -204,95 +204,77 @@ def execute_cartesian_path(waypoints, orientation, step_delay=50):
 
 
 # ===== Pick-Place 함수 =====
-def pick_object(pick_pos, grasp_z=0.69, grip_width=0.010):
-    """물체 집기 - Home position에서 시작하여 위에서 접근"""
-    safe_z = 0.95  # 안전 높이
-    approach_z = grasp_z + 0.10
+def pick_and_place(pick_pos, place_pos, pick_z, place_z, grip_width):
+    """
+    물체 집어서 놓기 - 명확한 단계별 동작
 
-    # 0. 그리퍼 열기 (집기 준비)
-    print(f"  [0] Opening gripper...")
+    동작 순서:
+    1. Home에서 시작, 그리퍼 열기
+    2. pick 위치의 10cm 위로 이동
+    3. pick 위치로 하강 (Z만 변경)
+    4. 그리퍼 닫기 (물체 잡기)
+    5. 10cm 위로 들어올리기
+    6. waypoint를 따라 place 위치의 10cm 위로 이동
+    7. place 위치로 하강 (Z만 변경)
+    8. 그리퍼 열기 (물체 놓기)
+    9. Home으로 복귀
+    """
+    pick_approach_z = pick_z + APPROACH_OFFSET   # pick 위치 10cm 위
+    place_approach_z = place_z + APPROACH_OFFSET  # place 위치 10cm 위
+
+    # === PICK 단계 ===
+
+    # 1. 그리퍼 열기
+    print(f"  [1] Opening gripper...")
     open_gripper()
     wait_for_motion(GRIPPER_STEPS)
 
-    # 1. 안전 높이에서 물체 위로 이동
-    print(f"  [1] Moving to safe height above object...")
-    move_to_position([pick_pos[0], pick_pos[1], safe_z], GRIPPER_ORN)
-    wait_for_motion(MOTION_STEPS * 2)  # 더 느리게
+    # 2. pick 위치의 10cm 위로 이동
+    print(f"  [2] Moving to pick approach (10cm above)...")
+    move_to_position([pick_pos[0], pick_pos[1], pick_approach_z], GRIPPER_ORN)
+    wait_for_motion(MOTION_STEPS)
 
-    # 2. 접근 높이로 하강
-    print(f"  [2] Descending to approach height...")
-    move_to_position([pick_pos[0], pick_pos[1], approach_z], GRIPPER_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
+    # 3. pick 위치로 하강 (Z만 변경)
+    print(f"  [3] Descending to pick position...")
+    move_to_position([pick_pos[0], pick_pos[1], pick_z], GRIPPER_ORN)
+    wait_for_motion(MOTION_STEPS)
 
-    # 3. 잡는 높이까지 천천히 하강
-    print(f"  [3] Lowering to grasp height...")
-    move_to_position([pick_pos[0], pick_pos[1], grasp_z], GRIPPER_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
-
-    # 4. 그리퍼 닫기 (더 세게)
-    print(f"  [4] Closing gripper firmly...")
+    # 4. 그리퍼 닫기 (물체 잡기)
+    print(f"  [4] Closing gripper (grasping)...")
     close_gripper(grip_width)
-    wait_for_motion(GRIPPER_STEPS * 2)
+    wait_for_motion(GRIPPER_STEPS)
 
-    # 5. 천천히 들어올리기
-    print(f"  [5] Lifting triangle slowly...")
-    move_to_position([pick_pos[0], pick_pos[1], safe_z], GRIPPER_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
+    # 5. 10cm 위로 들어올리기
+    print(f"  [5] Lifting object (10cm up)...")
+    move_to_position([pick_pos[0], pick_pos[1], pick_approach_z], GRIPPER_ORN)
+    wait_for_motion(MOTION_STEPS)
 
+    # === PLACE 단계 ===
 
-def place_object(pick_pos, place_pos, place_z=0.70):
-    """물체 배치 - Cartesian path로 이동 후 Home position으로 복귀"""
-    safe_z = 0.95
-    approach_z = place_z + 0.10
-
-    # 6. Cartesian path로 목표 위치까지 이동 (pick 위치 → 케이스)
-    current_pos = [pick_pos[0], pick_pos[1], safe_z]  # pick 후 현재 위치
-
-    # Waypoints 정의: 테이블 → 케이스 방향으로 안전하게 이동
-    # 중간점을 pick 위치와 place 위치 사이로 동적 계산
+    # 6. waypoint를 따라 place 위치의 10cm 위로 이동
+    print(f"  [6] Moving to place approach via waypoint...")
     mid_x = (pick_pos[0] + place_pos[0]) / 2
     mid_y = (pick_pos[1] + place_pos[1]) / 2
 
     waypoints = [
-        current_pos,
-        [mid_x, mid_y, safe_z],  # WP1: 중간점
-        [place_pos[0], place_pos[1], safe_z],  # WP2: 목표 위
+        [pick_pos[0], pick_pos[1], pick_approach_z],    # 현재 위치
+        [mid_x, mid_y, pick_approach_z],                 # 중간 waypoint
+        [place_pos[0], place_pos[1], place_approach_z],  # place 위치 10cm 위
     ]
-
-    print(f"  [6] Moving via Cartesian path to place position...")
-    # Cartesian path 계산 및 실행 (eef_step=0.01로 더 촘촘하게)
     interpolated = compute_cartesian_path(waypoints, eef_step=0.01)
     execute_cartesian_path(interpolated, GRIPPER_ORN, step_delay=30)
 
-    # 7. 접근 높이로 하강 (Cartesian path)
-    print(f"  [7] Descending to approach height via Cartesian path...")
-    descent_waypoints = [
-        [place_pos[0], place_pos[1], safe_z],
-        [place_pos[0], place_pos[1], approach_z],
-    ]
-    descent_interpolated = compute_cartesian_path(descent_waypoints, eef_step=0.01)
-    execute_cartesian_path(descent_interpolated, GRIPPER_ORN, step_delay=30)
+    # 7. place 위치로 하강 (Z만 변경)
+    print(f"  [7] Descending to place position...")
+    move_to_position([place_pos[0], place_pos[1], place_z], GRIPPER_ORN)
+    wait_for_motion(MOTION_STEPS)
 
-    # 8. 배치 높이까지 천천히 하강 (Cartesian path)
-    print(f"  [8] Lowering to place height via Cartesian path...")
-    final_descent = [
-        [place_pos[0], place_pos[1], approach_z],
-        [place_pos[0], place_pos[1], place_z],
-    ]
-    final_interpolated = compute_cartesian_path(final_descent, eef_step=0.01)
-    execute_cartesian_path(final_interpolated, GRIPPER_ORN, step_delay=30)
-
-    # 9. 그리퍼 열기
-    print(f"  [9] Opening gripper...")
+    # 8. 그리퍼 열기 (물체 놓기)
+    print(f"  [8] Opening gripper (releasing)...")
     open_gripper()
-    wait_for_motion(GRIPPER_STEPS * 2)
+    wait_for_motion(GRIPPER_STEPS)
 
-    # 10. 위로 후퇴
-    print(f"  [10] Retreating upward...")
-    move_to_position([place_pos[0], place_pos[1], safe_z], GRIPPER_ORN)
-    wait_for_motion(MOTION_STEPS * 2)
-
-    # 11. Home position으로 복귀
+    # 9. Home으로 복귀
     go_to_home_position()
 
 
@@ -320,23 +302,19 @@ def go_to_home_position():
 
 # ===== 메인 실행 =====
 def main():
-    # 초기화 - home position 설정 후 그리퍼 열기
+    # 초기화 - home position 설정
     print("Initializing robot to home position...")
     set_home_position()
     open_gripper()
     wait_for_motion(MOTION_STEPS)
 
-    # place_z 추정값
-    place_z = 0.70
-
     # 8개 객체 처리
-    for obj_num, name, pick_pos, place_pos, grasp_z, grip_width in objects_data:
+    for obj_num, name, pick_pos, place_pos, pick_z, place_z, grip_width in objects_data:
         print(f"\n=== Processing Object {obj_num}: {name} ===")
-        print(f"Pick: {pick_pos} -> Place: {place_pos}")
+        print(f"Pick: {pick_pos}, z={pick_z} -> Place: {place_pos}, z={place_z}")
 
         # Home → Pick → Place → Home 사이클
-        pick_object(pick_pos, grasp_z, grip_width)
-        place_object(pick_pos, place_pos, place_z)
+        pick_and_place(pick_pos, place_pos, pick_z, place_z, grip_width)
 
         print(f"Object {obj_num} ({name}) completed!")
 

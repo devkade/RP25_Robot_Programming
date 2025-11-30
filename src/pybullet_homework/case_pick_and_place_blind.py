@@ -79,26 +79,44 @@ objects_data = [
 ]
 
 
+# ===== 속도 설정 (느리게) =====
+SIM_SPEED = 1/480  # 시뮬레이션 속도 (느리게)
+MOTION_STEPS = 200  # 기본 동작 스텝 (늘림)
+GRIPPER_STEPS = 100  # 그리퍼 동작 스텝
+
+
 # ===== 헬퍼 함수 =====
 def open_gripper():
     """그리퍼 열기 (최대)"""
-    p.setJointMotorControl2(robot, 9, p.POSITION_CONTROL, targetPosition=0.04)
-    p.setJointMotorControl2(robot, 10, p.POSITION_CONTROL, targetPosition=0.04)
+    p.setJointMotorControl2(robot, 9, p.POSITION_CONTROL, targetPosition=0.04, force=20)
+    p.setJointMotorControl2(robot, 10, p.POSITION_CONTROL, targetPosition=0.04, force=20)
 
 
 def close_gripper(width):
     """그리퍼 닫기 (지정 너비)"""
-    p.setJointMotorControl2(robot, 9, p.POSITION_CONTROL, targetPosition=width)
-    p.setJointMotorControl2(robot, 10, p.POSITION_CONTROL, targetPosition=width)
+    p.setJointMotorControl2(robot, 9, p.POSITION_CONTROL, targetPosition=width, force=40)
+    p.setJointMotorControl2(robot, 10, p.POSITION_CONTROL, targetPosition=width, force=40)
 
 
 def move_to_position(target_pos, target_orn):
-    """IK 계산 후 조인트 이동"""
+    """IK 계산 후 조인트 이동 - 위에서 접근하도록 제약 추가"""
+    # IK에 조인트 범위 제약을 추가하여 위에서 접근하도록 유도
+    lower_limits = [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973]
+    upper_limits = [2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973]
+    joint_ranges = [5.8, 3.5, 5.8, 3.0, 5.8, 3.8, 5.8]
+    rest_poses = [0, -0.785, 0, -2.356, 0, 1.571, 0.785]  # 위에서 접근하는 자세
+
     joint_positions = p.calculateInverseKinematics(
         robot,
         endEffectorLinkIndex=11,
         targetPosition=target_pos,
-        targetOrientation=target_orn
+        targetOrientation=target_orn,
+        lowerLimits=lower_limits,
+        upperLimits=upper_limits,
+        jointRanges=joint_ranges,
+        restPoses=rest_poses,
+        maxNumIterations=100,
+        residualThreshold=1e-5
     )
 
     for i in range(7):
@@ -106,129 +124,170 @@ def move_to_position(target_pos, target_orn):
             robot,
             jointIndex=i,
             controlMode=p.POSITION_CONTROL,
-            targetPosition=joint_positions[i]
+            targetPosition=joint_positions[i],
+            force=240,
+            maxVelocity=1.0  # 속도 제한
         )
 
 
-def wait_for_motion(steps):
+def wait_for_motion(steps=None):
     """시뮬레이션 스텝 대기"""
+    if steps is None:
+        steps = MOTION_STEPS
     for _ in range(steps):
         p.stepSimulation()
-        time.sleep(1/240)
+        time.sleep(SIM_SPEED)
 
 
 # ===== 일반 객체 Pick-Place 함수 =====
 def pick_object(pick_pos, grasp_z, grip_width, orientation):
-    """일반 객체 집기"""
-    approach_z = grasp_z + 0.15
+    """
+    일반 객체 집기 - 위에서 접근
+    1. 물체 위로 이동 (높이)
+    2. 아래로 하강
+    3. 그리퍼로 잡기
+    4. 위로 들어올리기
+    """
+    safe_z = 0.95  # 안전 높이 (충분히 높게)
+    approach_z = grasp_z + 0.10  # 물체 바로 위
 
-    # 1. Approach
+    # 1. 안전 높이에서 물체 위치로 이동
+    print(f"  [1] Moving to safe height above object...")
+    move_to_position([pick_pos[0], pick_pos[1], safe_z], orientation)
+    wait_for_motion(MOTION_STEPS)
+
+    # 2. 물체 바로 위로 하강
+    print(f"  [2] Descending to approach height...")
     move_to_position([pick_pos[0], pick_pos[1], approach_z], orientation)
-    wait_for_motion(100)
+    wait_for_motion(MOTION_STEPS)
 
-    # 2. Descend
+    # 3. 잡는 높이까지 천천히 하강
+    print(f"  [3] Lowering to grasp height...")
     move_to_position([pick_pos[0], pick_pos[1], grasp_z], orientation)
-    wait_for_motion(100)
+    wait_for_motion(MOTION_STEPS)
 
-    # 3. Grasp
+    # 4. 그리퍼 닫기 (물체 잡기)
+    print(f"  [4] Closing gripper...")
     close_gripper(grip_width)
-    wait_for_motion(50)
+    wait_for_motion(GRIPPER_STEPS)
 
-    # 4. Lift
-    move_to_position([pick_pos[0], pick_pos[1], approach_z], orientation)
-    wait_for_motion(100)
+    # 5. 물체를 들어올리기
+    print(f"  [5] Lifting object...")
+    move_to_position([pick_pos[0], pick_pos[1], safe_z], orientation)
+    wait_for_motion(MOTION_STEPS)
 
 
 def place_object(place_pos, place_z, orientation):
-    """일반 객체 배치"""
-    approach_z = place_z + 0.15
+    """
+    일반 객체 배치 - 위에서 접근
+    1. 목표 위치 위로 이동 (높이)
+    2. 아래로 하강
+    3. 그리퍼 열기 (놓기)
+    4. 위로 후퇴
+    """
+    safe_z = 0.95  # 안전 높이
+    approach_z = place_z + 0.10  # 배치 위치 바로 위
 
-    # 5. Move
+    # 6. 안전 높이에서 목표 위치로 이동
+    print(f"  [6] Moving to place position...")
+    move_to_position([place_pos[0], place_pos[1], safe_z], orientation)
+    wait_for_motion(MOTION_STEPS)
+
+    # 7. 배치 위치 위로 하강
+    print(f"  [7] Descending to approach height...")
     move_to_position([place_pos[0], place_pos[1], approach_z], orientation)
-    wait_for_motion(100)
+    wait_for_motion(MOTION_STEPS)
 
-    # 6. Lower
+    # 8. 배치 높이까지 천천히 하강
+    print(f"  [8] Lowering to place height...")
     move_to_position([place_pos[0], place_pos[1], place_z], orientation)
-    wait_for_motion(100)
+    wait_for_motion(MOTION_STEPS)
 
-    # 7. Release
+    # 9. 그리퍼 열기 (물체 놓기)
+    print(f"  [9] Opening gripper (releasing object)...")
     open_gripper()
-    wait_for_motion(50)
+    wait_for_motion(GRIPPER_STEPS)
 
-    # 8. Retreat
-    move_to_position([place_pos[0], place_pos[1], approach_z], orientation)
-    wait_for_motion(100)
+    # 10. 위로 후퇴
+    print(f"  [10] Retreating upward...")
+    move_to_position([place_pos[0], place_pos[1], safe_z], orientation)
+    wait_for_motion(MOTION_STEPS)
 
 
 # ===== 삼각기둥 전용 함수 (다단계 이동) =====
 def pick_triangle(pick_pos, grasp_z=0.69, grip_width=0.010):
-    """삼각기둥 전용 pick - 다단계 접근"""
-    approach_z = 0.85  # 더 높은 안전 높이
-    mid_z = (approach_z + grasp_z) / 2
+    """
+    삼각기둥 전용 pick - 위에서 다단계 접근
+    무거운 물체이므로 더 천천히, 더 조심스럽게
+    """
+    safe_z = 0.95  # 안전 높이
+    approach_z = grasp_z + 0.10
 
-    # 1. 높은 위치에서 접근
+    # 1. 안전 높이에서 물체 위로 이동
+    print(f"  [1] Moving to safe height above triangle...")
+    move_to_position([pick_pos[0], pick_pos[1], safe_z], TRIANGLE_ORN)
+    wait_for_motion(MOTION_STEPS * 2)  # 더 느리게
+
+    # 2. 접근 높이로 하강
+    print(f"  [2] Descending to approach height...")
     move_to_position([pick_pos[0], pick_pos[1], approach_z], TRIANGLE_ORN)
-    wait_for_motion(150)
+    wait_for_motion(MOTION_STEPS * 2)
 
-    # 2. 중간 높이로 천천히 하강
-    move_to_position([pick_pos[0], pick_pos[1], mid_z], TRIANGLE_ORN)
-    wait_for_motion(100)
-
-    # 3. grasp 높이로 최종 하강
+    # 3. 잡는 높이까지 천천히 하강
+    print(f"  [3] Lowering to grasp height...")
     move_to_position([pick_pos[0], pick_pos[1], grasp_z], TRIANGLE_ORN)
-    wait_for_motion(150)
+    wait_for_motion(MOTION_STEPS * 2)
 
-    # 4. 그리퍼 닫기 (더 세게, 더 오래 대기)
+    # 4. 그리퍼 닫기 (더 세게)
+    print(f"  [4] Closing gripper firmly...")
     close_gripper(grip_width)
-    wait_for_motion(100)
+    wait_for_motion(GRIPPER_STEPS * 2)
 
     # 5. 천천히 들어올리기
-    move_to_position([pick_pos[0], pick_pos[1], mid_z], TRIANGLE_ORN)
-    wait_for_motion(150)
-
-    move_to_position([pick_pos[0], pick_pos[1], approach_z], TRIANGLE_ORN)
-    wait_for_motion(150)
+    print(f"  [5] Lifting triangle slowly...")
+    move_to_position([pick_pos[0], pick_pos[1], safe_z], TRIANGLE_ORN)
+    wait_for_motion(MOTION_STEPS * 2)
 
 
 def place_triangle_with_waypoints(place_pos, place_z=0.70):
-    """삼각기둥 전용 place - waypoint 사용"""
-    approach_z = 0.85
-    mid_z = (approach_z + place_z) / 2
+    """
+    삼각기둥 전용 place - waypoint로 안전하게 이동
+    """
+    safe_z = 0.95
+    approach_z = place_z + 0.10
 
-    # Waypoints: pick 위치 → 케이스
-    waypoints = [
-        (0.35, 0.15, approach_z),   # WP1: 테이블 위 중간
-        (0.15, 0.20, approach_z),   # WP2: 케이스 방향
-        (place_pos[0], place_pos[1], approach_z),  # WP3: 목표 위
-    ]
+    # 6. 안전 높이에서 목표 위치로 이동
+    print(f"  [6] Moving to place position...")
+    move_to_position([place_pos[0], place_pos[1], safe_z], TRIANGLE_ORN)
+    wait_for_motion(MOTION_STEPS * 2)
 
-    # 각 waypoint 순차 이동
-    for i, wp in enumerate(waypoints):
-        move_to_position(list(wp), TRIANGLE_ORN)
-        wait_for_motion(100)
-        print(f"Triangle waypoint {i+1} reached")
-
-    # 하강 (2단계)
-    move_to_position([place_pos[0], place_pos[1], mid_z], TRIANGLE_ORN)
-    wait_for_motion(100)
-
-    move_to_position([place_pos[0], place_pos[1], place_z], TRIANGLE_ORN)
-    wait_for_motion(150)
-
-    # 그리퍼 열기
-    open_gripper()
-    wait_for_motion(100)
-
-    # 천천히 후퇴
+    # 7. 접근 높이로 하강
+    print(f"  [7] Descending to approach height...")
     move_to_position([place_pos[0], place_pos[1], approach_z], TRIANGLE_ORN)
-    wait_for_motion(150)
+    wait_for_motion(MOTION_STEPS * 2)
+
+    # 8. 배치 높이까지 천천히 하강
+    print(f"  [8] Lowering to place height...")
+    move_to_position([place_pos[0], place_pos[1], place_z], TRIANGLE_ORN)
+    wait_for_motion(MOTION_STEPS * 2)
+
+    # 9. 그리퍼 열기
+    print(f"  [9] Opening gripper...")
+    open_gripper()
+    wait_for_motion(GRIPPER_STEPS * 2)
+
+    # 10. 위로 후퇴
+    print(f"  [10] Retreating upward...")
+    move_to_position([place_pos[0], place_pos[1], safe_z], TRIANGLE_ORN)
+    wait_for_motion(MOTION_STEPS * 2)
 
 
 # ===== 메인 실행 =====
 def main():
-    # 초기화
+    # 초기화 - 그리퍼 열고 대기
+    print("Initializing robot...")
     open_gripper()
-    wait_for_motion(50)
+    wait_for_motion(MOTION_STEPS)
 
     # place_z 추정값
     place_z = 0.70

@@ -66,16 +66,20 @@ for i in range(7):
     p.resetJointState(robot, i, HOME_JOINTS[i])
 
 # Home position에서 end-effector의 실제 orientation 획득
-# Franka Panda의 home position이 이미 위에서 아래를 향하는 자세임
 link_state = p.getLinkState(robot, 11)
-DEFAULT_ORN = link_state[1]  # Home position의 실제 quaternion 사용
+HOME_ORN = link_state[1]  # Home position의 실제 quaternion
 
-# 삼각기둥용: DEFAULT_ORN에서 yaw만 -90도 회전 (quaternion 곱셈)
+# 삼각기둥용 orientation (yaw -90도) - 이것이 위에서 아래로 올바르게 집는 자세
 yaw_rotation = p.getQuaternionFromEuler([0, 0, -math.pi/2])
-TRIANGLE_ORN = p.multiplyTransforms([0,0,0], DEFAULT_ORN, [0,0,0], yaw_rotation)[1]
+TRIANGLE_ORN = p.multiplyTransforms([0,0,0], HOME_ORN, [0,0,0], yaw_rotation)[1]
 
-print(f"DEFAULT_ORN (from home position): {DEFAULT_ORN}")
-print(f"TRIANGLE_ORN (with yaw -90): {TRIANGLE_ORN}")
+# 일반 객체용: TRIANGLE_ORN에서 yaw +90도 (원래 HOME_ORN 방향이 아닌 올바른 자세)
+# 실험 결과 TRIANGLE_ORN이 올바르므로, 일반 객체도 동일하게 사용
+DEFAULT_ORN = TRIANGLE_ORN  # 일반 객체도 같은 orientation 사용
+
+print(f"HOME_ORN (from home position): {HOME_ORN}")
+print(f"DEFAULT_ORN (same as TRIANGLE): {DEFAULT_ORN}")
+print(f"TRIANGLE_ORN (yaw -90): {TRIANGLE_ORN}")
 
 # ===== 객체 데이터 정의 =====
 # (물체#, 변수명, pick_pos, place_pos, grasp_z, grip_width, use_triangle_orn)
